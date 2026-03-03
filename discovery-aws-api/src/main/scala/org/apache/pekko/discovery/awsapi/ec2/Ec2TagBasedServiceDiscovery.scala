@@ -50,53 +50,30 @@ import scala.util.{ Failure, Success, Try }
         new Filter(kv(0), List(kv(1)).asJava)
       })
 
-}
+  private[ec2] def buildEc2Client(system: ExtendedActorSystem): AmazonEC2 = {
+    val log = Logging(system, classOf[Ec2TagBasedServiceDiscovery])
+    val config = system.settings.config.getConfig("pekko.discovery.aws-api-ec2-tag-based")
 
-final class Ec2TagBasedServiceDiscovery(system: ExtendedActorSystem) extends ServiceDiscovery {
-
-  private val log = Logging(system, classOf[Ec2TagBasedServiceDiscovery])
-
-  private implicit val ec: ExecutionContext = system.dispatchers.lookup("pekko.actor.default-blocking-io-dispatcher")
-
-  private val config = system.settings.config.getConfig("pekko.discovery.aws-api-ec2-tag-based")
-
-  private val clientConfigFqcn: Option[String] = { // FQCN of a class that extends com.amazonaws.ClientConfiguration
-    config.getString("client-config") match {
+    val clientConfigFqcn: Option[String] = config.getString("client-config") match {
       case ""   => None
       case fqcn => Some(fqcn)
     }
-  }
 
-  private val tagKey = config.getString("tag-key")
-
-  private val otherFiltersString = config.getString("filters")
-  private val otherFilters = parseFiltersString(otherFiltersString)
-
-  private val preDefinedPorts =
-    config.getIntList("ports").asScala.toList match {
-      case Nil  => None
-      case list => Some(list) // Pekko Management ports
+    val defaultClientConfiguration = {
+      val clientConfiguration = new ClientConfiguration()
+      // we have our own retry/back-off mechanism (in Cluster Bootstrap), so we don't need EC2Client's in addition
+      clientConfiguration.setRetryPolicy(PredefinedRetryPolicies.NO_RETRY_POLICY)
+      clientConfiguration
     }
 
-  private val runningInstancesFilter = new Filter("instance-state-name", List("running").asJava)
+    def getCustomClientConfigurationInstance(fqcn: String): Try[ClientConfiguration] =
+      system.dynamicAccess
+        .createInstanceFor[ClientConfiguration](fqcn, List(classOf[ExtendedActorSystem] -> system))
+        .recoverWith {
+          case _: NoSuchMethodException =>
+            system.dynamicAccess.createInstanceFor[ClientConfiguration](fqcn, Nil)
+        }
 
-  private val defaultClientConfiguration = {
-    val clientConfiguration = new ClientConfiguration()
-    // we have our own retry/back-off mechanism (in Cluster Bootstrap), so we don't need EC2Client's in addition
-    clientConfiguration.setRetryPolicy(PredefinedRetryPolicies.NO_RETRY_POLICY)
-    clientConfiguration
-  }
-
-  private def getCustomClientConfigurationInstance(fqcn: String): Try[ClientConfiguration] = {
-    system.dynamicAccess
-      .createInstanceFor[ClientConfiguration](fqcn, List(classOf[ExtendedActorSystem] -> system))
-      .recoverWith {
-        case _: NoSuchMethodException =>
-          system.dynamicAccess.createInstanceFor[ClientConfiguration](fqcn, Nil)
-      }
-  }
-
-  private val ec2Client: AmazonEC2 = {
     val clientConfiguration = clientConfigFqcn match {
       case Some(fqcn) =>
         getCustomClientConfigurationInstance(fqcn) match {
@@ -115,6 +92,7 @@ final class Ec2TagBasedServiceDiscovery(system: ExtendedActorSystem) extends Ser
       case None =>
         defaultClientConfiguration
     }
+
     val builder = AmazonEC2ClientBuilder.standard().withClientConfiguration(clientConfiguration)
 
     if (config.hasPath("endpoint") && config.hasPath("region")) {
@@ -125,6 +103,33 @@ final class Ec2TagBasedServiceDiscovery(system: ExtendedActorSystem) extends Ser
 
     builder.build()
   }
+
+}
+
+final class Ec2TagBasedServiceDiscovery(system: ExtendedActorSystem, private[ec2] val ec2Client: AmazonEC2)
+    extends ServiceDiscovery {
+
+  def this(system: ExtendedActorSystem) =
+    this(system, Ec2TagBasedServiceDiscovery.buildEc2Client(system))
+
+  private val log = Logging(system, classOf[Ec2TagBasedServiceDiscovery])
+
+  private implicit val ec: ExecutionContext = system.dispatchers.lookup("pekko.actor.default-blocking-io-dispatcher")
+
+  private val config = system.settings.config.getConfig("pekko.discovery.aws-api-ec2-tag-based")
+
+  private val tagKey = config.getString("tag-key")
+
+  private val otherFiltersString = config.getString("filters")
+  private val otherFilters = parseFiltersString(otherFiltersString)
+
+  private val preDefinedPorts =
+    config.getIntList("ports").asScala.toList match {
+      case Nil  => None
+      case list => Some(list) // Pekko Management ports
+    }
+
+  private val runningInstancesFilter = new Filter("instance-state-name", List("running").asJava)
 
   @tailrec
   private def getInstances(
