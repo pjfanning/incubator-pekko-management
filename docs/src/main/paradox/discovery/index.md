@@ -8,7 +8,6 @@ Pekko Management contains methods for:
 
  * @ref[Kubernetes](kubernetes.md)
  * @ref[Consul](consul.md)
- * @ref[Marathon](marathon.md)
  * @ref[AWS](aws.md)
  
 The @ref[Kubernetes](kubernetes.md) and @extref:[Pekko Discovery DNS](pekko:discovery/index.html#discovery-method-dns)
@@ -19,7 +18,6 @@ part of the build and release process.
 
   - [Kubernetes](kubernetes.md)
   - [Consul](consul.md)
-  - [Marathon](marathon.md)
   - [AWS](aws.md)
   
 @@@
