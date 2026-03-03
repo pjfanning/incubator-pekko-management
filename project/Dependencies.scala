@@ -75,7 +75,9 @@ object Dependencies {
     "org.apache.pekko" %% "pekko-discovery" % pekkoVersion,
     "com.amazonaws" % "aws-java-sdk-ec2" % awsSdkVersion,
     "com.amazonaws" % "aws-java-sdk-ecs" % awsSdkVersion,
-    "org.scalatest" %% "scalatest" % scalaTestVersion % Test) ++ jacksonDatabind // aws-java-sdk depends on insecure version of jackson
+    "org.scalatest" %% "scalatest" % scalaTestVersion % Test,
+    "org.apache.pekko" %% "pekko-testkit" % pekkoVersion % Test,
+    "org.mockito" % "mockito-core" % "5.22.0" % Test) ++ jacksonDatabind // aws-java-sdk depends on insecure version of jackson
 
   val discoveryAwsApiAsync = Seq(
     "org.apache.pekko" %% "pekko-actor" % pekkoVersion,
