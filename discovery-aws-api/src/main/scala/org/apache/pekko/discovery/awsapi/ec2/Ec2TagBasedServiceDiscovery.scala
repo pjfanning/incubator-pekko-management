@@ -13,11 +13,11 @@
 
 package org.apache.pekko.discovery.awsapi.ec2
 
-import com.amazonaws.ClientConfiguration
-import com.amazonaws.client.builder.AwsClientBuilder.EndpointConfiguration
-import com.amazonaws.retry.PredefinedRetryPolicies
-import com.amazonaws.services.ec2.model.{ DescribeInstancesRequest, Filter, Reservation }
-import com.amazonaws.services.ec2.{ AmazonEC2, AmazonEC2ClientBuilder }
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration
+import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.retries.DefaultRetryStrategy
+import software.amazon.awssdk.services.ec2.Ec2Client
+import software.amazon.awssdk.services.ec2.model.{ DescribeInstancesRequest, Filter }
 import org.apache.pekko
 import pekko.actor.ExtendedActorSystem
 import pekko.annotation.InternalApi
@@ -27,14 +27,14 @@ import pekko.discovery.{ Lookup, ServiceDiscovery }
 import pekko.event.Logging
 import pekko.pattern.after
 
-import java.net.InetAddress
+import java.net.{ InetAddress, URI }
 import java.util.concurrent.TimeoutException
 import scala.annotation.tailrec
 import scala.collection.immutable.Seq
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ ExecutionContext, Future }
 import scala.jdk.CollectionConverters._
-import scala.util.{ Failure, Success, Try }
+import scala.util.Try
 
 /** INTERNAL API */
 @InternalApi private[ec2] object Ec2TagBasedServiceDiscovery {
@@ -47,7 +47,7 @@ import scala.util.{ Failure, Success, Try }
       .toList
       .map(kv => {
         assert(kv.length == 2, "failed to parse one of the key-value pairs in filters")
-        new Filter(kv(0), List(kv(1)).asJava)
+        Filter.builder().name(kv(0)).values(kv(1)).build()
       })
 
 }
@@ -60,13 +60,6 @@ final class Ec2TagBasedServiceDiscovery(system: ExtendedActorSystem) extends Ser
 
   private val config = system.settings.config.getConfig("pekko.discovery.aws-api-ec2-tag-based")
 
-  private val clientConfigFqcn: Option[String] = { // FQCN of a class that extends com.amazonaws.ClientConfiguration
-    config.getString("client-config") match {
-      case ""   => None
-      case fqcn => Some(fqcn)
-    }
-  }
-
   private val tagKey = config.getString("tag-key")
 
   private val otherFiltersString = config.getString("filters")
@@ -78,49 +71,19 @@ final class Ec2TagBasedServiceDiscovery(system: ExtendedActorSystem) extends Ser
       case list => Some(list) // Pekko Management ports
     }
 
-  private val runningInstancesFilter = new Filter("instance-state-name", List("running").asJava)
+  private val runningInstancesFilter = Filter.builder().name("instance-state-name").values("running").build()
 
-  private val defaultClientConfiguration = {
-    val clientConfiguration = new ClientConfiguration()
+  private val ec2Client: Ec2Client = {
     // we have our own retry/back-off mechanism (in Cluster Bootstrap), so we don't need EC2Client's in addition
-    clientConfiguration.setRetryPolicy(PredefinedRetryPolicies.NO_RETRY_POLICY)
-    clientConfiguration
-  }
+    val overrideConfig =
+      ClientOverrideConfiguration.builder().retryStrategy(DefaultRetryStrategy.doNotRetry()).build()
+    val builder = Ec2Client.builder().overrideConfiguration(overrideConfig)
 
-  private def getCustomClientConfigurationInstance(fqcn: String): Try[ClientConfiguration] = {
-    system.dynamicAccess
-      .createInstanceFor[ClientConfiguration](fqcn, List(classOf[ExtendedActorSystem] -> system))
-      .recoverWith {
-        case _: NoSuchMethodException =>
-          system.dynamicAccess.createInstanceFor[ClientConfiguration](fqcn, Nil)
-      }
-  }
-
-  private val ec2Client: AmazonEC2 = {
-    val clientConfiguration = clientConfigFqcn match {
-      case Some(fqcn) =>
-        getCustomClientConfigurationInstance(fqcn) match {
-          case Success(clientConfig) =>
-            if (clientConfig.getRetryPolicy != PredefinedRetryPolicies.NO_RETRY_POLICY) {
-              log.warning(
-                "If you're using this module for bootstrapping your Apache Pekko cluster, " +
-                "Cluster Bootstrap already has its own retry/back-off mechanism. " +
-                "To avoid RequestLimitExceeded errors from AWS, " +
-                "disable retries in the EC2 client configuration.")
-            }
-            clientConfig
-          case Failure(ex) =>
-            throw new Exception(s"Could not create instance of '$fqcn'", ex)
-        }
-      case None =>
-        defaultClientConfiguration
+    if (config.hasPath("endpoint")) {
+      builder.endpointOverride(URI.create(config.getString("endpoint")))
     }
-    val builder = AmazonEC2ClientBuilder.standard().withClientConfiguration(clientConfiguration)
-
-    if (config.hasPath("endpoint") && config.hasPath("region")) {
-      val endpoint = config.getString("endpoint")
-      val region = config.getString("region")
-      builder.withEndpointConfiguration(new EndpointConfiguration(endpoint, region))
+    if (config.hasPath("region")) {
+      builder.region(Region.of(config.getString("region")))
     }
 
     builder.build()
@@ -128,25 +91,26 @@ final class Ec2TagBasedServiceDiscovery(system: ExtendedActorSystem) extends Ser
 
   @tailrec
   private def getInstances(
-      client: AmazonEC2,
+      client: Ec2Client,
       filters: List[Filter],
       nextToken: Option[String],
       accumulator: List[String] = Nil): List[String] = {
 
-    val describeInstancesRequest = new DescribeInstancesRequest()
-      .withFilters(filters.asJava) // withFilters is a set operation (i.e. calls setFilters, be careful with chaining)
-      .withNextToken(nextToken.orNull)
+    val describeInstancesRequest = DescribeInstancesRequest.builder()
+      .filters(filters.asJava)
+      .nextToken(nextToken.orNull)
+      .build()
 
     val describeInstancesResult = client.describeInstances(describeInstancesRequest)
 
     val ips: List[String] =
-      describeInstancesResult.getReservations.asScala.toList
-        .flatMap((r: Reservation) => r.getInstances.asScala.toList)
-        .map(instance => instance.getPrivateIpAddress)
+      describeInstancesResult.reservations().asScala.toList
+        .flatMap(r => r.instances().asScala.toList)
+        .map(instance => instance.privateIpAddress())
 
     val accumulatedIps = accumulator ++ ips
 
-    Option(describeInstancesResult.getNextToken) match {
+    Option(describeInstancesResult.nextToken()) match {
       case None =>
         accumulatedIps // aws api has no more results to return, so we return what we have accumulated so far
       case nextPageToken @ Some(_) =>
@@ -166,7 +130,7 @@ final class Ec2TagBasedServiceDiscovery(system: ExtendedActorSystem) extends Ser
 
   def lookup(query: Lookup): Future[Resolved] = {
 
-    val tagFilter = new Filter("tag:" + tagKey, List(query.serviceName).asJava)
+    val tagFilter = Filter.builder().name("tag:" + tagKey).values(query.serviceName).build()
 
     val allFilters: List[Filter] = runningInstancesFilter :: tagFilter :: otherFilters
 
@@ -176,7 +140,9 @@ final class Ec2TagBasedServiceDiscovery(system: ExtendedActorSystem) extends Ser
           case None =>
             ResolvedTarget(host = ip, port = None, address = Try(InetAddress.getByName(ip)).toOption) :: Nil
           case Some(ports) =>
-            ports.map(p => ResolvedTarget(host = ip, port = Some(p), address = Try(InetAddress.getByName(ip)).toOption)) // this allows multiple pekko nodes (i.e. JVMs) per EC2 instance
+            ports.map(p =>
+              ResolvedTarget(host = ip, port = Some(p),
+                address = Try(InetAddress.getByName(ip)).toOption)) // this allows multiple pekko nodes (i.e. JVMs) per EC2 instance
         })
     }.map(resoledTargets => Resolved(query.serviceName, resoledTargets))
 

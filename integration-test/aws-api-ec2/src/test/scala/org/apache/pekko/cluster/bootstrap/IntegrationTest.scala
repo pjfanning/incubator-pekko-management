@@ -12,10 +12,11 @@
  */
 package org.apache.pekko.cluster.bootstrap
 
-import com.amazonaws.services.cloudformation.AmazonCloudFormationClientBuilder
-import com.amazonaws.services.cloudformation.model._
-import com.amazonaws.services.ec2.AmazonEC2ClientBuilder
-import com.amazonaws.services.ec2.model.{ DescribeInstancesRequest, Filter, Reservation }
+import software.amazon.awssdk.regions.Region
+import software.amazon.awssdk.services.cloudformation.CloudFormationClient
+import software.amazon.awssdk.services.cloudformation.model._
+import software.amazon.awssdk.services.ec2.Ec2Client
+import software.amazon.awssdk.services.ec2.model.{ DescribeInstancesRequest, Filter }
 import org.apache.pekko
 import pekko.actor.ActorSystem
 import pekko.event.Logging
@@ -71,9 +72,9 @@ class IntegrationTest extends AnyFunSuite with Eventually with BeforeAndAfterAll
 
   private val stackName = s"PekkoManagementIntegrationTestEC2TagBased-${buildId.replace(".", "-")}"
 
-  private val awsCfClient = AmazonCloudFormationClientBuilder.standard().withRegion(region).build()
+  private val awsCfClient = CloudFormationClient.builder().region(Region.of(region)).build()
 
-  private val awsEc2Client = AmazonEC2ClientBuilder.standard().withRegion(region).build()
+  private val awsEc2Client = Ec2Client.builder().region(Region.of(region)).build()
 
   // Patience settings for the part where we wait for the CloudFormation script to complete
   private val createStackPatience: PatienceConfig =
@@ -101,31 +102,31 @@ class IntegrationTest extends AnyFunSuite with Eventually with BeforeAndAfterAll
 
     val myIp: String = s"$getMyIp/32"
 
-    val createStackRequest = new CreateStackRequest()
-      .withCapabilities("CAPABILITY_IAM")
-      .withStackName(stackName)
-      .withTemplateBody(template)
-      .withParameters(
-        new Parameter()
-          .withParameterKey("Build")
-          .withParameterValue(s"https://s3.amazonaws.com/$bucket/$buildId/app.zip"),
-        new Parameter().withParameterKey("SSHLocation").withParameterValue(myIp),
-        new Parameter().withParameterKey("InstanceCount").withParameterValue(instanceCount.toString),
-        new Parameter().withParameterKey("InstanceType").withParameterValue("m3.xlarge"),
-        new Parameter().withParameterKey("KeyPair").withParameterValue("none"),
-        new Parameter().withParameterKey("Purpose").withParameterValue(s"demo-$buildId"))
+    awsCfClient.createStack(
+      CreateStackRequest.builder()
+        .capabilities(Capability.CAPABILITY_IAM)
+        .stackName(stackName)
+        .templateBody(template)
+        .parameters(
+          Seq(
+            Parameter.builder().parameterKey("Build").parameterValue(
+              s"https://s3.amazonaws.com/$bucket/$buildId/app.zip").build(),
+            Parameter.builder().parameterKey("SSHLocation").parameterValue(myIp).build(),
+            Parameter.builder().parameterKey("InstanceCount").parameterValue(instanceCount.toString).build(),
+            Parameter.builder().parameterKey("InstanceType").parameterValue("m3.xlarge").build(),
+            Parameter.builder().parameterKey("KeyPair").parameterValue("none").build(),
+            Parameter.builder().parameterKey("Purpose").parameterValue(s"demo-$buildId").build()).asJava)
+        .build())
 
-    awsCfClient.createStack(createStackRequest)
+    val describeStacksRequest = DescribeStacksRequest.builder().stackName(stackName).build()
 
-    val describeStacksRequest = new DescribeStacksRequest().withStackName(stackName)
+    var dsr: DescribeStacksResponse = null
 
-    var dsr: DescribeStacksResult = null
-
-    def conditions: Boolean = (dsr.getStacks.size() == 1) && {
-      val stack = dsr.getStacks.get(0)
-      stack.getStackStatus == StackStatus.CREATE_COMPLETE.toString &&
-      stack.getOutputs.size() >= 1 &&
-      stack.getOutputs.asScala.exists(_.getOutputKey == "AutoScalingGroupName")
+    def conditions: Boolean = (dsr.stacks().size() == 1) && {
+      val stack = dsr.stacks().get(0)
+      stack.stackStatusAsString() == StackStatus.CREATE_COMPLETE.toString &&
+      stack.outputs().size() >= 1 &&
+      stack.outputs().asScala.exists(_.outputKey() == "AutoScalingGroupName")
     }
 
     implicit val patienceConfig: PatienceConfig = createStackPatience
@@ -145,15 +146,16 @@ class IntegrationTest extends AnyFunSuite with Eventually with BeforeAndAfterAll
       log.info("got CREATE_COMPLETE, trying to obtain IPs of EC2 instances launched")
 
       val asgName =
-        dsr.getStacks.get(0).getOutputs.asScala.find(_.getOutputKey == "AutoScalingGroupName").get.getOutputValue
+        dsr.stacks().get(0).outputs().asScala.find(_.outputKey() == "AutoScalingGroupName").get.outputValue()
 
       val ips: List[(String, String)] = awsEc2Client
-        .describeInstances(new DescribeInstancesRequest()
-          .withFilters(new Filter("tag:aws:autoscaling:groupName", List(asgName).asJava)))
-        .getReservations
+        .describeInstances(
+          DescribeInstancesRequest.builder()
+            .filters(Filter.builder().name("tag:aws:autoscaling:groupName").values(asgName).build())
+            .build())
+        .reservations()
         .asScala
-        .flatMap((r: Reservation) =>
-          r.getInstances.asScala.map(instance => (instance.getPublicIpAddress, instance.getPrivateIpAddress)))
+        .flatMap(r => r.instances().asScala.map(instance => (instance.publicIpAddress(), instance.privateIpAddress())))
         .toList
         .filter(ips =>
           ips._1 != null && ips._2 != null) // TODO: investigate whether there are edge cases that may makes this necessary
@@ -222,7 +224,7 @@ class IntegrationTest extends AnyFunSuite with Eventually with BeforeAndAfterAll
     eventually(timeout = Timeout(3.minutes), interval = Interval(3.seconds)) {
       // we put this into an an eventually block since we want to retry
       // for a while, in case it throws an exception.
-      awsCfClient.deleteStack(new DeleteStackRequest().withStackName(stackName))
+      awsCfClient.deleteStack(DeleteStackRequest.builder().stackName(stackName).build())
     }
     system.terminate()
   }

@@ -13,7 +13,7 @@
 
 package org.apache.pekko.discovery.awsapi.ec2
 
-import com.amazonaws.services.ec2.model.Filter
+import software.amazon.awssdk.services.ec2.model.Filter
 import org.apache.pekko
 import pekko.discovery.awsapi.ec2.Ec2TagBasedServiceDiscovery.parseFiltersString
 import org.scalatest.funsuite.AnyFunSuite
@@ -33,9 +33,9 @@ class FiltersParsingTest extends AnyFunSuite with Matchers {
     val filters = "tag:purpose=demo"
     val result: List[Filter] = parseFiltersString(filters)
     result should have size 1
-    result.head.getName should ===("tag:purpose")
-    result.head.getValues.asScala should have size 1
-    result.head.getValues.asScala.head should ===("demo")
+    result.head.name() should ===("tag:purpose")
+    result.head.values().asScala should have size 1
+    result.head.values().asScala.head should ===("demo")
   }
 
   test("can parse more complicated filter") {
@@ -43,14 +43,14 @@ class FiltersParsingTest extends AnyFunSuite with Matchers {
     val result = parseFiltersString(filters)
     result should have size 3
 
-    result.head.getName should ===("tag:purpose")
-    result.head.getValues.asScala should ===(List("production"))
+    result.head.name() should ===("tag:purpose")
+    result.head.values().asScala should ===(List("production"))
 
-    result(1).getName should ===("tag:department")
-    result(1).getValues.asScala should ===(List("engineering"))
+    result(1).name() should ===("tag:department")
+    result(1).values().asScala should ===(List("engineering"))
 
-    result(2).getName should ===("tag:critical")
-    result(2).getValues.asScala should ===(List("no"))
+    result(2).name() should ===("tag:critical")
+    result(2).values().asScala should ===(List("no"))
   }
 
 }

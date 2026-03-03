@@ -16,20 +16,21 @@ package org.apache.pekko.discovery.awsapi.ec2;
 // #custom-client-config
 // package com.example;
 
-import com.amazonaws.ClientConfiguration;
-import com.amazonaws.retry.PredefinedRetryPolicies;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.ec2.Ec2Client;
 
-class MyConfiguration extends ClientConfiguration {
+/**
+ * Example showing how to build a custom Ec2Client with AWS SDK v2.
+ * For most use-cases, region and endpoint are configured via
+ * pekko.discovery.aws-api-ec2-tag-based.region and
+ * pekko.discovery.aws-api-ec2-tag-based.endpoint in application.conf.
+ */
+class MyConfiguration {
 
-  public MyConfiguration() {
-
-    setProxyHost(".."); // and/or other things you would like to set
-
-    setRetryPolicy(PredefinedRetryPolicies.NO_RETRY_POLICY);
-    // If you're using this module for bootstrapping your Pekko cluster,
-    // Cluster Bootstrap already has its own retry/back-off mechanism. To avoid RequestLimitExceeded
-    // errors from AWS,
-    // disable retries in the EC2 client configuration.
+  public Ec2Client buildClient() {
+    return Ec2Client.builder()
+        .region(Region.US_EAST_1)
+        .build();
   }
 }
 // #custom-client-config

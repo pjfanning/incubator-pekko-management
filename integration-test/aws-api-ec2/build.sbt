@@ -11,9 +11,7 @@ enablePlugins(JavaAppPackaging)
 
 Universal / packageName := "app" // should produce app.zip
 
-libraryDependencies += "com.amazonaws" % "aws-java-sdk-cloudformation" % "1.12.785" % Test
-
-libraryDependencies += "com.amazonaws" % "aws-java-sdk-autoscaling" % "1.12.785" % Test
+libraryDependencies += "software.amazon.awssdk" % "cloudformation" % Dependencies.awsSdkV2Version % Test
 
 libraryDependencies += "com.fasterxml.jackson.core" % "jackson-databind" % "2.14.3"
 
