@@ -153,9 +153,8 @@ There are two "flavours" of the ECS Discovery module.
 
 ##### pekko-discovery-aws-api
 
-This uses the mainstream AWS SDK. The advantage here is that if you've already
-got the mainstream AWS SDK as a dependency you're not now also bringing in the
-preview SDK. The disadvantage is that the mainstream SDK does blocking IO.
+This uses the AWS SDK v2 for synchronous EC2 and ECS API calls. This is a good choice if you
+prefer synchronous IO.
 
 @@dependency[sbt,Gradle,Maven] {
   symbol1=PekkoManagementVersion
@@ -180,14 +179,8 @@ pekko.discovery {
 
 ##### pekko-discovery-aws-api-async
 
-This uses the preview AWS SDK. The advantage here is that the SDK does
-non-blocking IO, which you probably want. You might need to think carefully
-before using this though if you've already got the mainstream AWS SDK as a
-dependency.
-
-Once the async AWS SDK is out of preview it is likely that the
-`pekko-discovery-aws-api` module will be discontinued in favour of
-`pekko-discovery-aws-api-async`.
+This uses the AWS SDK v2 with a non-blocking async HTTP client (Netty), which you probably want
+for production workloads.
 
 @@dependency[sbt,Gradle,Maven] {
   symbol1=PekkoManagementVersion
