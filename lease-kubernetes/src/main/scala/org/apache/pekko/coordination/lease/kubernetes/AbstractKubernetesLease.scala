@@ -21,7 +21,6 @@ import scala.util.{ Failure, Success }
 import scala.annotation.nowarn
 
 import org.apache.pekko
-import pekko.coordination.lease.kubernetes.AbstractKubernetesLease.makeDNS1039Compatible
 import pekko.actor.ExtendedActorSystem
 import pekko.coordination.lease.kubernetes.LeaseActor._
 import pekko.coordination.lease.scaladsl.Lease
@@ -38,10 +37,10 @@ object AbstractKubernetesLease {
   private val leaseCounter = new AtomicInteger(1)
 
   /**
-   * Limit the length of a name to 63 characters.
+   * Limit the length of a name to the given number of characters.
    * Some subsystem of Kubernetes cannot manage longer names.
    */
-  private def truncateTo63Characters(name: String): String = name.take(63)
+  private def truncateToLength(name: String, maxLength: Int): String = name.take(maxLength)
 
   /**
    * Removes from the leading and trailing positions the specified characters.
@@ -52,12 +51,12 @@ object AbstractKubernetesLease {
   /**
    * Make a name compatible with DNS 1039 standard: like a single domain name segment.
    * Regex to follow: [a-z]([-a-z0-9]*[a-z0-9])
-   * Limit the resulting name to 63 characters
+   * Limit the resulting name to maxLength characters (default 63).
    */
-  private def makeDNS1039Compatible(name: String): String = {
+  private[kubernetes] def makeDNS1039Compatible(name: String, maxLength: Int = 63): String = {
     val normalized =
       Normalizer.normalize(name, Normalizer.Form.NFKD).toLowerCase.replaceAll("[_.]", "-").replaceAll("[^-a-z0-9]", "")
-    trim(truncateTo63Characters(normalized), List('-'))
+    trim(truncateToLength(normalized, maxLength), List('-'))
   }
 }
 
@@ -74,7 +73,7 @@ abstract class AbstractKubernetesLease(system: ExtendedActorSystem, leaseTaken: 
 
   private implicit val timeout: Timeout = Timeout(settings.timeoutSettings.operationTimeout)
 
-  private val leaseName = makeDNS1039Compatible(settings.leaseName)
+  private val leaseName = AbstractKubernetesLease.makeDNS1039Compatible(settings.leaseName, k8sSettings.leaseLabelMaxLength)
   private val leaseActor = system.systemActorOf(
     LeaseActor.props(k8sApi, settings, leaseName, leaseTaken),
     s"kubernetesLease${AbstractKubernetesLease.leaseCounter.incrementAndGet}")
