@@ -47,6 +47,12 @@ class KubernetesSettingsSpec extends AnyWordSpec with Matchers {
     "support tls-version override" in {
       conf("tls-version=TLSv1.3").tlsVersion shouldEqual "TLSv1.3"
     }
+    "default lease-name-max-length to 63" in {
+      conf("").leaseLabelMaxLength shouldEqual 63
+    }
+    "support lease-name-max-length override" in {
+      conf("lease-name-max-length=40").leaseLabelMaxLength shouldEqual 40
+    }
     "not allow server request timeout greater than operation timeout" in {
       intercept[IllegalArgumentException] {
         conf("""
