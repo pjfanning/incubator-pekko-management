@@ -73,7 +73,8 @@ abstract class AbstractKubernetesLease(system: ExtendedActorSystem, leaseTaken: 
 
   private implicit val timeout: Timeout = Timeout(settings.timeoutSettings.operationTimeout)
 
-  private val leaseName = AbstractKubernetesLease.makeDNS1039Compatible(settings.leaseName, k8sSettings.leaseLabelMaxLength)
+  private val leaseName =
+    AbstractKubernetesLease.makeDNS1039Compatible(settings.leaseName, k8sSettings.leaseLabelMaxLength)
   private val leaseActor = system.systemActorOf(
     LeaseActor.props(k8sApi, settings, leaseName, leaseTaken),
     s"kubernetesLease${AbstractKubernetesLease.leaseCounter.incrementAndGet}")
