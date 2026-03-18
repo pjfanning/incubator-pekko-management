@@ -13,6 +13,8 @@ addSbtPlugin("com.github.sbt" % "sbt-header" % "5.11.0")
 addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.5.6")
 addSbtPlugin("com.github.sbt" % "sbt-java-formatter" % "0.10.0")
 addSbtPlugin("com.github.sbt" % "sbt-dynver" % "5.1.1")
+// need commons-codec upgrade here due to clashes with dependency versions used in pekko-management itself
+libraryDependencies += "commons-codec" % "commons-codec" % "1.21.0"
 addSbtPlugin("com.github.sbt" % "sbt-unidoc" % "0.6.1")
 addSbtPlugin("com.thoughtworks.sbt-api-mappings" % "sbt-api-mappings" % "3.0.2")
 addSbtPlugin("net.bzzt" % "sbt-reproducible-builds" % "0.32")
