@@ -92,13 +92,16 @@ object AbstractKubernetesLease {
    * Limit the resulting name to maxLength characters (default 63).
    * When truncation is necessary and hashLength > 0, the last (hashLength + 1) characters of the
    * truncated name are replaced by a hyphen followed by a hashLength-character hash suffix derived
-   * from a SHA-256 digest of the original name (base32-encoded, last hashLength chars taken).
+   * from a SHA-256 digest of the original name (base32-encoded, first hashLength chars taken).
+   * If hashLength >= maxLength the result consists entirely of the first maxLength hash characters.
    */
   private[kubernetes] def makeDNS1039Compatible(name: String, maxLength: Int = 63, hashLength: Int = 0): String = {
     val normalized =
       Normalizer.normalize(name, Normalizer.Form.NFKD).toLowerCase.replaceAll("[_.]", "-").replaceAll("[^-a-z0-9]", "")
     if (normalized.length <= maxLength || hashLength <= 0) {
       trim(truncateToLength(normalized, maxLength), List('-'))
+    } else if (hashLength >= maxLength) {
+      computeHashSuffix(name, maxLength)
     } else {
       val hashSuffix = computeHashSuffix(name, hashLength)
       val prefixLength = maxLength - hashLength - 1
