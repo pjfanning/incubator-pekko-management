@@ -52,15 +52,15 @@ object AbstractKubernetesLease {
     var buffer = 0
     var bitsLeft = 0
     for (b <- bytes) {
-      buffer = (buffer << 8) | (b & 0xff)
+      buffer = (buffer << 8) | (b & 0xFF)
       bitsLeft += 8
       while (bitsLeft >= 5) {
         bitsLeft -= 5
-        sb.append(base32Alphabet((buffer >> bitsLeft) & 0x1f))
+        sb.append(base32Alphabet((buffer >> bitsLeft) & 0x1F))
       }
     }
     if (bitsLeft > 0) {
-      sb.append(base32Alphabet((buffer << (5 - bitsLeft)) & 0x1f))
+      sb.append(base32Alphabet((buffer << (5 - bitsLeft)) & 0x1F))
     }
     sb.toString()
   }

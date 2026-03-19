@@ -1,10 +1,18 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * license agreements; and to You under the Apache License, version 2.0:
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- *   https://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * This file is part of the Apache Pekko project, which was derived from Akka.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package org.apache.pekko.coordination.lease.kubernetes
@@ -55,14 +63,14 @@ class MakeDNS1039CompatibleSpec extends AnyWordSpec with Matchers {
     "not truncate when name fits within maxLength" in {
       val name63 = "a" * 63
       AbstractKubernetesLease.makeDNS1039Compatible(name63, 63, 8) shouldEqual name63
-      AbstractKubernetesLease.makeDNS1039Compatible(name63 + "extra", 63, 8) should not equal name63 + "extra"
+      (AbstractKubernetesLease.makeDNS1039Compatible(name63 + "extra", 63, 8) should not).equal(name63 + "extra")
     }
 
     "append hash suffix when truncation is needed and hashLength > 0" in {
       val longName = "a" * 100
       val result = AbstractKubernetesLease.makeDNS1039Compatible(longName, 63, 8)
       result.length shouldEqual 63
-      result.takeRight(8) should fullyMatch regex "[a-z2-7]{8}"
+      (result.takeRight(8) should fullyMatch).regex("[a-z2-7]{8}")
       result should include("-")
     }
 
@@ -80,7 +88,7 @@ class MakeDNS1039CompatibleSpec extends AnyWordSpec with Matchers {
       val r1 = AbstractKubernetesLease.makeDNS1039Compatible(name1, 63, 8)
       val r2 = AbstractKubernetesLease.makeDNS1039Compatible(name2, 63, 8)
       // The prefix is identical but hash suffixes differ because originals differ
-      r1 should not equal r2
+      (r1 should not).equal(r2)
     }
 
     "produce different results for long names that differ only in the last character" in {
@@ -91,7 +99,7 @@ class MakeDNS1039CompatibleSpec extends AnyWordSpec with Matchers {
       val name2 = base + "c"
       val r1 = AbstractKubernetesLease.makeDNS1039Compatible(name1, 63, 8)
       val r2 = AbstractKubernetesLease.makeDNS1039Compatible(name2, 63, 8)
-      r1 should not equal r2
+      (r1 should not).equal(r2)
       // Both must be valid length
       r1.length shouldEqual 63
       r2.length shouldEqual 63
@@ -103,7 +111,7 @@ class MakeDNS1039CompatibleSpec extends AnyWordSpec with Matchers {
       val name2 = base + "de"
       val r1 = AbstractKubernetesLease.makeDNS1039Compatible(name1, 63, 8)
       val r2 = AbstractKubernetesLease.makeDNS1039Compatible(name2, 63, 8)
-      r1 should not equal r2
+      (r1 should not).equal(r2)
       r1.length shouldEqual 63
       r2.length shouldEqual 63
     }
@@ -111,7 +119,7 @@ class MakeDNS1039CompatibleSpec extends AnyWordSpec with Matchers {
     "produce only valid DNS 1039 characters when hash suffix is added" in {
       val longName = "My-Very-Long-Lease.Name_With_Special-Characters-That-Exceeds-63-Chars-Limit"
       val result = AbstractKubernetesLease.makeDNS1039Compatible(longName, 63, 8)
-      result should fullyMatch regex "[a-z][a-z0-9-]*[a-z0-9]"
+      (result should fullyMatch).regex("[a-z][a-z0-9-]*[a-z0-9]")
       result.length should be <= 63
     }
 
@@ -120,7 +128,7 @@ class MakeDNS1039CompatibleSpec extends AnyWordSpec with Matchers {
       val result = AbstractKubernetesLease.makeDNS1039Compatible(longName, 63, 12)
       result.length shouldEqual 63
       // last 12 chars are the hash suffix
-      result.takeRight(12) should fullyMatch regex "[a-z2-7]{12}"
+      (result.takeRight(12) should fullyMatch).regex("[a-z2-7]{12}")
     }
 
     "not add hash when hashLength is 0 even if truncation occurs" in {
@@ -135,16 +143,16 @@ class MakeDNS1039CompatibleSpec extends AnyWordSpec with Matchers {
       // because the base32 digest (52 chars) is shorter than maxLength
       val result = AbstractKubernetesLease.makeDNS1039Compatible(longName, 63, 63)
       result.length should be <= 63
-      result should fullyMatch regex "[a-z2-7]+"
-      result should not include "-"
+      (result should fullyMatch).regex("[a-z2-7]+")
+      (result should not).include("-")
     }
 
     "return only hash chars (capped at maxLength) when hashLength exceeds maxLength" in {
       val longName = "a" * 100
       val result = AbstractKubernetesLease.makeDNS1039Compatible(longName, 63, 100)
       result.length should be <= 63
-      result should fullyMatch regex "[a-z2-7]+"
-      result should not include "-"
+      (result should fullyMatch).regex("[a-z2-7]+")
+      (result should not).include("-")
     }
 
     "return different names when hashLength >= maxLength and original names differ" in {
@@ -152,7 +160,7 @@ class MakeDNS1039CompatibleSpec extends AnyWordSpec with Matchers {
       val name2 = "b" * 100
       val r1 = AbstractKubernetesLease.makeDNS1039Compatible(name1, 63, 100)
       val r2 = AbstractKubernetesLease.makeDNS1039Compatible(name2, 63, 100)
-      r1 should not equal r2
+      (r1 should not).equal(r2)
       r1.length should be <= 63
       r2.length should be <= 63
     }
@@ -162,7 +170,7 @@ class MakeDNS1039CompatibleSpec extends AnyWordSpec with Matchers {
       val longName = "My-Very-Long-Lease.Name_With_Special-Characters"
       val result = AbstractKubernetesLease.makeDNS1039Compatible(longName, 10, 10)
       result.length shouldEqual 10
-      result should fullyMatch regex "[a-z2-7]{10}"
+      (result should fullyMatch).regex("[a-z2-7]{10}")
     }
 
     "hash suffix contains only lowercase letters and digits (no uppercase, no '=' padding)" in {
@@ -176,10 +184,10 @@ class MakeDNS1039CompatibleSpec extends AnyWordSpec with Matchers {
         val result = AbstractKubernetesLease.makeDNS1039Compatible(name, 63, 8)
         val suffix = result.takeRight(8)
         withClue(s"suffix '$suffix' of '$result' (from '$name') must match [a-z2-7]{8}: ") {
-          suffix should fullyMatch regex "[a-z2-7]{8}"
+          (suffix should fullyMatch).regex("[a-z2-7]{8}")
         }
         withClue(s"result '$result' must not contain '=': ") {
-          result should not include "="
+          (result should not).include("=")
         }
       }
     }
