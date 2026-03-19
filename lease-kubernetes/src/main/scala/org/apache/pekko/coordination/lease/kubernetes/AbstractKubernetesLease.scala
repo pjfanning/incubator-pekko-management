@@ -106,7 +106,7 @@ object AbstractKubernetesLease {
       val hashSuffix = computeHashSuffix(name, hashLength)
       val prefixLength = maxLength - hashLength - 1
       val prefix = trim(truncateToLength(normalized, prefixLength), List('-'))
-      prefix + "-" + hashSuffix
+      s"$prefix-$hashSuffix"
     }
   }
 }
