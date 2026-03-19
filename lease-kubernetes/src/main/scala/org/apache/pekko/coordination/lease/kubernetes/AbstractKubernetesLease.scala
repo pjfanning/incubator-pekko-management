@@ -47,7 +47,7 @@ object AbstractKubernetesLease {
    * Base32-encode a byte array using a lowercase alphabet and no '=' padding.
    * Every output character is in [a-z2-7], making the result safe for use in DNS 1039 labels.
    */
-  private def base32Encode(bytes: Array[Byte]): String = {
+  private[kubernetes] def base32Encode(bytes: Array[Byte]): String = {
     val sb = new StringBuilder
     var buffer = 0
     var bitsLeft = 0
