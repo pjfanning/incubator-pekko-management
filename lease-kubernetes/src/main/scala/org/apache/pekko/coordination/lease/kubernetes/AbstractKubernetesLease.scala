@@ -66,12 +66,12 @@ object AbstractKubernetesLease {
   }
 
   /**
-   * Compute a short hash suffix for the given name: SHA-256 → base32 → last `length` chars.
+   * Compute a short hash suffix for the given name: SHA-256 → base32 → first `length` chars.
    */
   private def computeHashSuffix(name: String, length: Int): String = {
     val digest = MessageDigest.getInstance("SHA-256")
     val hashBytes = digest.digest(name.getBytes(StandardCharsets.UTF_8))
-    base32Encode(hashBytes).takeRight(length)
+    base32Encode(hashBytes).take(length)
   }
 
   /**

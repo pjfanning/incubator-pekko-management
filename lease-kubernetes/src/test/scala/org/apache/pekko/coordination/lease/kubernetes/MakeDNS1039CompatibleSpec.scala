@@ -83,6 +83,31 @@ class MakeDNS1039CompatibleSpec extends AnyWordSpec with Matchers {
       r1 should not equal r2
     }
 
+    "produce different results for long names that differ only in the last character" in {
+      // Both names are 70 chars and share the first 69 chars; they truncate to the same prefix
+      // without a hash but must produce different DNS1039 results with one
+      val base = "a" * 69
+      val name1 = base + "b"
+      val name2 = base + "c"
+      val r1 = AbstractKubernetesLease.makeDNS1039Compatible(name1, 63, 8)
+      val r2 = AbstractKubernetesLease.makeDNS1039Compatible(name2, 63, 8)
+      r1 should not equal r2
+      // Both must be valid length
+      r1.length shouldEqual 63
+      r2.length shouldEqual 63
+    }
+
+    "produce different results for long names that differ only in the last two characters" in {
+      val base = "a" * 68
+      val name1 = base + "bc"
+      val name2 = base + "de"
+      val r1 = AbstractKubernetesLease.makeDNS1039Compatible(name1, 63, 8)
+      val r2 = AbstractKubernetesLease.makeDNS1039Compatible(name2, 63, 8)
+      r1 should not equal r2
+      r1.length shouldEqual 63
+      r2.length shouldEqual 63
+    }
+
     "produce only valid DNS 1039 characters when hash suffix is added" in {
       val longName = "My-Very-Long-Lease.Name_With_Special-Characters-That-Exceeds-63-Chars-Limit"
       val result = AbstractKubernetesLease.makeDNS1039Compatible(longName, 63, 8)
