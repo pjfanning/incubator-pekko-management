@@ -17,6 +17,8 @@
 
 package org.apache.pekko.coordination.lease.kubernetes
 
+import java.nio.charset.StandardCharsets.UTF_8 
+
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -69,27 +71,27 @@ class Base32EncodeSpec extends AnyWordSpec with Matchers {
 
     "encode 'f' (single byte 0x66) matching RFC 4648 vector" in {
       // 0x66 = 01100110 → 01100=12='m', 110<<2=11000=24='y'
-      encode("f".getBytes("UTF-8")) shouldEqual "my"
+      encode("f".getBytes(UTF_8)) shouldEqual "my"
     }
 
     "encode 'fo' (two bytes) matching RFC 4648 vector" in {
-      encode("fo".getBytes("UTF-8")) shouldEqual "mzxq"
+      encode("fo".getBytes(UTF_8)) shouldEqual "mzxq"
     }
 
     "encode 'foo' (three bytes) matching RFC 4648 vector" in {
-      encode("foo".getBytes("UTF-8")) shouldEqual "mzxw6"
+      encode("foo".getBytes(UTF_8)) shouldEqual "mzxw6"
     }
 
     "encode 'foob' (four bytes) matching RFC 4648 vector" in {
-      encode("foob".getBytes("UTF-8")) shouldEqual "mzxw6yq"
+      encode("foob".getBytes(UTF_8)) shouldEqual "mzxw6yq"
     }
 
     "encode 'fooba' (five bytes — full 8-char group) matching RFC 4648 vector" in {
-      encode("fooba".getBytes("UTF-8")) shouldEqual "mzxw6ytb"
+      encode("fooba".getBytes(UTF_8)) shouldEqual "mzxw6ytb"
     }
 
     "encode 'foobar' (six bytes) matching RFC 4648 vector" in {
-      encode("foobar".getBytes("UTF-8")) shouldEqual "mzxw6ytboi"
+      encode("foobar".getBytes(UTF_8)) shouldEqual "mzxw6ytboi"
     }
 
     // ---- output properties ------------------------------------------------
@@ -131,12 +133,12 @@ class Base32EncodeSpec extends AnyWordSpec with Matchers {
     }
 
     "produce the same output for the same input (determinism)" in {
-      val input = "hello world".getBytes("UTF-8")
+      val input = "hello world".getBytes(UTF_8)
       encode(input) shouldEqual encode(input)
     }
 
     "produce different output for different inputs" in {
-      (encode("abc".getBytes("UTF-8")) should not).equal(encode("abd".getBytes("UTF-8")))
+      (encode("abc".getBytes(UTF_8)) should not).equal(encode("abd".getBytes(UTF_8)))
     }
   }
 }
