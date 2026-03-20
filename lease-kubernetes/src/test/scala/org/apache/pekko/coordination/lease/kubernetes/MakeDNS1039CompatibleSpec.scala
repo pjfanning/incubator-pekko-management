@@ -46,12 +46,16 @@ class MakeDNS1039CompatibleSpec extends AnyWordSpec with Matchers {
 
     "truncate to 63 characters by default (no hash when hashLength is 0)" in {
       val longName = "a" * 100
-      AbstractKubernetesLease.makeDNS1039Compatible(longName, 63, 0).length shouldEqual 63
+      val result = AbstractKubernetesLease.makeDNS1039Compatible(longName, 63, 0)
+      (result should have).length(63)
+      result shouldEqual "a" * 63
     }
 
     "truncate to a custom maxLength (no hash when hashLength is 0)" in {
       val longName = "a" * 100
-      AbstractKubernetesLease.makeDNS1039Compatible(longName, 40, 0).length shouldEqual 40
+      val result = AbstractKubernetesLease.makeDNS1039Compatible(longName, 40, 0)
+      (result should have).length(40)
+      result shouldEqual "a" * 40
     }
 
     "trim trailing hyphens after truncation (no hash)" in {
@@ -69,7 +73,7 @@ class MakeDNS1039CompatibleSpec extends AnyWordSpec with Matchers {
     "append hash suffix when truncation is needed and hashLength > 0" in {
       val longName = "a" * 100
       val result = AbstractKubernetesLease.makeDNS1039Compatible(longName, 63, 8)
-      result.length shouldEqual 63
+      (result should have).length(63)
       (result.takeRight(8) should fullyMatch).regex("[a-z2-7]{8}")
       result should include("-")
     }
@@ -101,8 +105,8 @@ class MakeDNS1039CompatibleSpec extends AnyWordSpec with Matchers {
       val r2 = AbstractKubernetesLease.makeDNS1039Compatible(name2, 63, 8)
       (r1 should not).equal(r2)
       // Both must be valid length
-      r1.length shouldEqual 63
-      r2.length shouldEqual 63
+      (r1 should have).length(63)
+      (r2 should have).length(63)
     }
 
     "produce different results for long names that differ only in the last two characters" in {
@@ -112,21 +116,21 @@ class MakeDNS1039CompatibleSpec extends AnyWordSpec with Matchers {
       val r1 = AbstractKubernetesLease.makeDNS1039Compatible(name1, 63, 8)
       val r2 = AbstractKubernetesLease.makeDNS1039Compatible(name2, 63, 8)
       (r1 should not).equal(r2)
-      r1.length shouldEqual 63
-      r2.length shouldEqual 63
+      (r1 should have).length(63)
+      (r2 should have).length(63)
     }
 
     "produce only valid DNS 1039 characters when hash suffix is added" in {
       val longName = "My-Very-Long-Lease.Name_With_Special-Characters-That-Exceeds-63-Chars-Limit"
       val result = AbstractKubernetesLease.makeDNS1039Compatible(longName, 63, 8)
       (result should fullyMatch).regex("[a-z][a-z0-9-]*[a-z0-9]")
-      result.length should be <= 63
+      (result should have).length(63)
     }
 
     "respect a custom hashLength" in {
       val longName = "a" * 100
       val result = AbstractKubernetesLease.makeDNS1039Compatible(longName, 63, 12)
-      result.length shouldEqual 63
+      (result should have).length(63)
       // last 12 chars are the hash suffix
       (result.takeRight(12) should fullyMatch).regex("[a-z2-7]{12}")
     }
@@ -137,39 +141,37 @@ class MakeDNS1039CompatibleSpec extends AnyWordSpec with Matchers {
       result shouldEqual "a" * 63
     }
 
-    "return only hash chars when hashLength equals maxLength" in {
+    "return full hash when hashLength equals maxLength" in {
       val longName = "a" * 100
       // SHA-256 → 32 bytes → 52 base32 chars; take(maxLength=63) returns the full 52-char hash
-      // because the base32 digest (52 chars) is shorter than maxLength
+      // but that leaves room for a short prefix and hyphen
       val result = AbstractKubernetesLease.makeDNS1039Compatible(longName, 63, 63)
-      result.length should be <= 63
-      (result should fullyMatch).regex("[a-z2-7]+")
-      (result should not).include("-")
+      (result should have).length(63)
+      assert(result.startsWith("aaaaaaaaaa-"))
     }
 
-    "return only hash chars (capped at maxLength) when hashLength exceeds maxLength" in {
+    "return full (capped at maxLength) when hashLength exceeds maxLength" in {
       val longName = "a" * 100
       val result = AbstractKubernetesLease.makeDNS1039Compatible(longName, 63, 100)
-      result.length should be <= 63
-      (result should fullyMatch).regex("[a-z2-7]+")
-      (result should not).include("-")
+      (result should have).length(63)
+      assert(result.startsWith("aaaaaaaaaa-"))
     }
 
     "return different names when hashLength >= maxLength and original names differ" in {
       val name1 = "a" * 100
-      val name2 = "b" * 100
+      val name2 = ("a" * 99) + "b" // normalizes to same 'a'*100 but is a different original
       val r1 = AbstractKubernetesLease.makeDNS1039Compatible(name1, 63, 100)
       val r2 = AbstractKubernetesLease.makeDNS1039Compatible(name2, 63, 100)
       (r1 should not).equal(r2)
-      r1.length should be <= 63
-      r2.length should be <= 63
+      (r1 should have).length(63)
+      (r2 should have).length(63)
     }
 
     "return a valid DNS 1039 name when hashLength equals maxLength for a small maxLength" in {
       // maxLength=10, hashLength=10: take(10) from 52 base32 chars → exactly 10 chars
       val longName = "My-Very-Long-Lease.Name_With_Special-Characters"
       val result = AbstractKubernetesLease.makeDNS1039Compatible(longName, 10, 10)
-      result.length shouldEqual 10
+      (result should have).length(10)
       (result should fullyMatch).regex("[a-z2-7]{10}")
     }
 

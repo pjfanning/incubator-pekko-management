@@ -100,13 +100,19 @@ object AbstractKubernetesLease {
       Normalizer.normalize(name, Normalizer.Form.NFKD).toLowerCase.replaceAll("[_.]", "-").replaceAll("[^-a-z0-9]", "")
     if (normalized.length <= maxLength || hashLength <= 0) {
       trim(truncateToLength(normalized, maxLength), List('-'))
-    } else if (hashLength >= maxLength) {
-      computeHashSuffix(name, maxLength)
     } else {
-      val hashSuffix = computeHashSuffix(name, hashLength)
-      val prefixLength = maxLength - hashLength - 1
-      val prefix = trim(truncateToLength(normalized, prefixLength), List('-'))
-      s"$prefix-$hashSuffix"
+      val maxSuffixLength = math.min(hashLength, maxLength)
+      val hashSuffix = computeHashSuffix(name, maxSuffixLength)
+      if (hashSuffix.length >= maxLength - 1) {
+        // Hash suffix alone fills or exceeds the max length, so return only hash chars (capped at maxLength)
+        // also account for the '-' that would be added if we had room for a prefix
+        hashSuffix.take(maxLength)
+      } else {
+        // Truncate prefix to fit the hash suffix and hyphen within maxLength
+        val prefixLength = maxLength - hashSuffix.length - 1
+        val prefix = trim(truncateToLength(normalized, prefixLength), List('-'))
+        s"$prefix-$hashSuffix"
+      }
     }
   }
 }
