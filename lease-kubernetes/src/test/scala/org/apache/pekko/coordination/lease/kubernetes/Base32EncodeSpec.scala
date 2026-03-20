@@ -17,7 +17,7 @@
 
 package org.apache.pekko.coordination.lease.kubernetes
 
-import java.nio.charset.StandardCharsets.UTF_8 
+import java.nio.charset.StandardCharsets.UTF_8
 
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
