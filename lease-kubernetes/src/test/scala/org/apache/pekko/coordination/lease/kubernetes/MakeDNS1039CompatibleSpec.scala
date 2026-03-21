@@ -175,6 +175,14 @@ class MakeDNS1039CompatibleSpec extends AnyWordSpec with Matchers {
       (result should fullyMatch).regex("[a-z2-7]{10}")
     }
 
+    "return a valid DNS 1039 name when hashLength 1 less than maxLength for a small maxLength" in {
+      // maxLength=10, hashLength=9: take(9) from 52 base32 chars → exactly 9 chars
+      val longName = "My-Very-Long-Lease.Name_With_Special-Characters"
+      val result = AbstractKubernetesLease.makeDNS1039Compatible(longName, 10, 9)
+      (result should have).length(9)
+      (result should fullyMatch).regex("[a-z2-7]{9}")
+    }
+
     "hash suffix contains only lowercase letters and digits (no uppercase, no '=' padding)" in {
       // Use many different inputs to exercise the full base32 output, including partial-group chars
       val inputs = Seq(
