@@ -107,7 +107,8 @@ class IntegrationTest extends AnyFunSuite with Eventually with BeforeAndAfterAll
       .stackName(stackName)
       .templateBody(template)
       .parameters(
-        Parameter.builder().parameterKey("Build").parameterValue(s"https://s3.amazonaws.com/$bucket/$buildId/app.zip").build(),
+        Parameter.builder().parameterKey("Build").parameterValue(
+          s"https://s3.amazonaws.com/$bucket/$buildId/app.zip").build(),
         Parameter.builder().parameterKey("SSHLocation").parameterValue(myIp).build(),
         Parameter.builder().parameterKey("InstanceCount").parameterValue(instanceCount.toString).build(),
         Parameter.builder().parameterKey("InstanceType").parameterValue("m3.xlarge").build(),

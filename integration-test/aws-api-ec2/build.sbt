@@ -11,9 +11,11 @@ enablePlugins(JavaAppPackaging)
 
 Universal / packageName := "app" // should produce app.zip
 
-libraryDependencies += ("software.amazon.awssdk" % "cloudformation" % Dependencies.awsSdkV2Version).exclude("software.amazon.awssdk", "apache-client") % Test
+libraryDependencies += ("software.amazon.awssdk" % "cloudformation" % Dependencies.awsSdkV2Version).exclude(
+  "software.amazon.awssdk", "apache-client") % Test
 
-libraryDependencies += ("software.amazon.awssdk" % "autoscaling" % Dependencies.awsSdkV2Version).exclude("software.amazon.awssdk", "apache-client") % Test
+libraryDependencies += ("software.amazon.awssdk" % "autoscaling" % Dependencies.awsSdkV2Version).exclude(
+  "software.amazon.awssdk", "apache-client") % Test
 
 libraryDependencies += "com.fasterxml.jackson.core" % "jackson-databind" % "2.14.3"
 
