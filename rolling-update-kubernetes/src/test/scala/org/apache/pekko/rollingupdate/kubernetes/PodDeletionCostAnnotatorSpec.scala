@@ -139,8 +139,8 @@ class PodDeletionCostAnnotatorSpec
       val probe = TestProbe()
       Cluster(system).join(Cluster(system).selfMember.address)
       probe.awaitAssert({
-        Cluster(system).selfMember.status == MemberStatus.Up
-      }, 3.seconds)
+          Cluster(system).selfMember.status == MemberStatus.Up
+        }, 3.seconds)
 
     }
 
@@ -197,8 +197,8 @@ class PodDeletionCostAnnotatorSpec
       val probe = TestProbe()
       Cluster(system2).join(Cluster(system).selfMember.address)
       probe.awaitAssert({
-        Cluster(system2).selfMember.status == MemberStatus.Up
-      }, 3.seconds)
+          Cluster(system2).selfMember.status == MemberStatus.Up
+        }, 3.seconds)
 
       system2.actorOf(annotatorProps(podName2))
       eventually {
@@ -216,8 +216,8 @@ class PodDeletionCostAnnotatorSpec
       val probe = TestProbe()
       Cluster(system).join(Cluster(system).selfMember.address)
       probe.awaitAssert({
-        Cluster(system).selfMember.status == MemberStatus.Up
-      }, 3.seconds)
+          Cluster(system).selfMember.status == MemberStatus.Up
+        }, 3.seconds)
     }
 
     "not annotate until backoff delay expires" in {

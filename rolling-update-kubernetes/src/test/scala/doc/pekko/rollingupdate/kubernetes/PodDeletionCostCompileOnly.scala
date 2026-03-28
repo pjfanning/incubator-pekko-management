@@ -20,9 +20,9 @@ object PodDeletionCostCompileOnly {
 
   val system = ActorSystem()
 
-  //#start
+  // #start
   // Starting the pod deletion cost annotator
   PodDeletionCost(system).start()
-  //#start
+  // #start
 
 }
