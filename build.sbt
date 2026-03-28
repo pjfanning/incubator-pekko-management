@@ -51,7 +51,8 @@ val userProjects: Seq[ProjectReference] = Seq[ProjectReference](
   management,
   managementPki,
   managementClusterHttp,
-  managementClusterBootstrap) ++ logLevelProjectList
+  managementClusterBootstrap,
+  rollingUpdateKubernetes) ++ logLevelProjectList
 
 val projectList: Seq[ProjectReference] =
   userProjects ++ Seq[ProjectReference](
@@ -183,6 +184,14 @@ lazy val leaseKubernetes = pekkoModule("lease-kubernetes")
     name := "pekko-lease-kubernetes",
     libraryDependencies := Dependencies.leaseKubernetes,
     mimaPreviousArtifactsSet)
+  .dependsOn(managementPki)
+
+lazy val rollingUpdateKubernetes = pekkoModule("rolling-update-kubernetes")
+  .enablePlugins(AutomateHeaderPlugin, ReproducibleBuildsPlugin)
+  .settings(
+    name := "pekko-rolling-update-kubernetes",
+    libraryDependencies := Dependencies.rollingUpdateKubernetes,
+    mimaPreviousArtifacts := Set.empty)
   .dependsOn(managementPki)
 
 lazy val billOfMaterials = Project("bill-of-materials", file("bill-of-materials"))

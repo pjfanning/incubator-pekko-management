@@ -10,7 +10,8 @@ Pekko Management consists of multiple modules:
  * @ref[pekko-cluster-bootstrap](bootstrap/index.md) helps bootstrapping a Pekko cluster using @extref:[Pekko Discovery](pekko:discovery/index.html).
  * @ref[pekko-management-cluster-http](cluster-http-management.md) is a module that provides HTTP endpoints for introspecting and managing Pekko clusters.
  * @ref[kubernetes-lease](kubernetes-lease.md) a lease backed by Kubernetes API server. 
- 
+ * @ref[rolling-updates](rolling-updates.md) provides recommendations and extensions for having smoother rolling updates.
+
  As well as @extref:[Pekko Discovery](pekko:discovery/index.html) methods for:
  
  * @ref[Kubernetes API](discovery/kubernetes.md)
@@ -36,4 +37,5 @@ Various parts of Pekko management can be used together for deploying Pekko Clust
   - [Pekko Cluster Management (JMX)](cluster-jmx-management.md)
   - [Dynamic Log Levels](loglevels/index.md)
   - [Pekko Coordination Lease for Kubernetes](kubernetes-lease.md)
+  - [Rolling Updates](rolling-updates.md)
 @@@
