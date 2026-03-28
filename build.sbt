@@ -179,6 +179,10 @@ lazy val rollingUpdateKubernetes = pekkoModule("rolling-update-kubernetes")
   .settings(
     name := "pekko-rolling-update-kubernetes",
     libraryDependencies := Dependencies.rollingUpdateKubernetes ++ junitDependencies.value,
+    // following is needed by Agrona lib
+    // https://github.com/aeron-io/agrona/wiki/Change-Log#200-2024-12-17
+    Test / fork := true,
+    Test / javaOptions += "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED",
     mimaPreviousArtifacts := Set.empty)
   .dependsOn(managementPki)
 
