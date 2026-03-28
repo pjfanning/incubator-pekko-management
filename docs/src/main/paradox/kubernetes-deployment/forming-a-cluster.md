@@ -195,3 +195,8 @@ livenessProbe:
   failureThreshold: 10
   initialDelaySeconds: 20
 ```
+
+
+## Rolling Updates
+
+Starting from Kubernetes v1.22, ReplicaSets are not scaled down with the youngest node first which can cause problems for the Pekko cluster. A new Pekko extension was developed to address this issue, and you can find the documentation under @ref:[Kubernetes Rolling Updates](../rolling-updates.md#kubernetes-rolling-updates) section.

@@ -146,6 +146,15 @@ object Dependencies {
     "org.apache.pekko" %% "pekko-distributed-data" % pekkoVersion % Test,
     "org.scalatest" %% "scalatest" % scalaTestVersion % Test)
 
+  val rollingUpdateKubernetes = Seq(
+    "org.apache.pekko" %% "pekko-actor" % pekkoVersion,
+    "org.apache.pekko" %% "pekko-cluster" % pekkoVersion,
+    "org.apache.pekko" %% "pekko-http" % pekkoHttpVersion,
+    "org.apache.pekko" %% "pekko-http-spray-json" % pekkoHttpVersion,
+    "org.apache.pekko" %% "pekko-testkit" % pekkoVersion % Test,
+    "org.scalatest" %% "scalatest" % scalaTestVersion % Test) ++
+    wireMockDependencies
+
   val leaseKubernetes = Seq(
     "org.apache.pekko" %% "pekko-actor" % pekkoVersion,
     "org.apache.pekko" %% "pekko-coordination" % pekkoVersion,

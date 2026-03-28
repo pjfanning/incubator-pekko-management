@@ -1,0 +1,124 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * license agreements; and to You under the Apache License, version 2.0:
+ *
+ *   https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * This file is part of the Apache Pekko project, which was derived from Akka.
+ */
+
+/*
+ * Copyright (C) 2017-2021 Lightbend Inc. <https://www.lightbend.com>
+ */
+
+package org.apache.pekko.rollingupdate.kubernetes
+
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.actor.ClassicActorSystemProvider
+import org.apache.pekko.actor.ExtendedActorSystem
+import org.apache.pekko.actor.Extension
+import org.apache.pekko.actor.ExtensionId
+import org.apache.pekko.actor.ExtensionIdProvider
+import org.apache.pekko.actor.Props
+import org.apache.pekko.annotation.InternalApi
+import org.apache.pekko.dispatch.Dispatchers.DefaultBlockingDispatcherId
+import org.apache.pekko.event.Logging
+import org.apache.pekko.rollingupdate.kubernetes.PodDeletionCost.Internal.BootstrapStep
+import org.apache.pekko.rollingupdate.kubernetes.PodDeletionCost.Internal.Initializing
+import org.apache.pekko.rollingupdate.kubernetes.PodDeletionCost.Internal.NotRunning
+
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.util.concurrent.atomic.AtomicReference
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.util.control.NonFatal
+
+final class PodDeletionCost(implicit system: ExtendedActorSystem) extends Extension {
+
+  private val log = Logging(system, classOf[PodDeletionCost])
+  private val configPath = "pekko.rollingupdate.kubernetes"
+  private val config = system.settings.config.getConfig(configPath)
+  private val k8sSettings = KubernetesSettings(config)
+  private val costSettings = PodDeletionCostSettings(config)
+  log.debug("Settings {}", k8sSettings)
+
+  private final val startStep = new AtomicReference[BootstrapStep](NotRunning)
+
+  def start(): Unit = {
+    if (k8sSettings.podName.isEmpty) {
+      log.warning(
+        "No configuration found to extract the pod name from. " +
+        s"Be sure to provide the pod name with `$configPath.pod-name` " +
+        "or by setting ENV variable `KUBERNETES_POD_NAME`.")
+    } else if (startStep.compareAndSet(NotRunning, Initializing)) {
+      log.debug("Starting PodDeletionCost for podName={} with settings={}", k8sSettings.podName, costSettings)
+
+      implicit val blockingDispatcher: ExecutionContext = system.dispatchers.lookup(DefaultBlockingDispatcherId)
+      val props = for {
+        apiToken: String <- Future { readConfigVarFromFilesystem(k8sSettings.apiTokenPath, "api-token").getOrElse("") }
+        podNamespace: String <- Future {
+          k8sSettings.namespace
+            .orElse(readConfigVarFromFilesystem(k8sSettings.namespacePath, "namespace"))
+            .getOrElse("default")
+        }
+      } yield Props(classOf[PodDeletionCostAnnotator], k8sSettings, apiToken, podNamespace, costSettings)
+
+      props.foreach(system.systemActorOf(_, "podDeletionCostAnnotator"))
+    } else log.warning("PodDeletionCost extension already initiated, yet start() method was called again. Ignoring.")
+  }
+
+  /**
+   * This uses blocking IO, and so should only be used to read configuration at startup.
+   */
+  private def readConfigVarFromFilesystem(path: String, name: String): Option[String] = {
+    val file = Paths.get(path)
+    if (Files.exists(file)) {
+      try {
+        Some(new String(Files.readAllBytes(file), "utf-8"))
+      } catch {
+        case NonFatal(e) =>
+          log.error(e, "Error reading {} from {}", name, path)
+          None
+      }
+    } else {
+      log.warning("Unable to read {} from {} because it doesn't exist.", name, path)
+      None
+    }
+  }
+
+  // autostart if the extension is loaded through the config extension list
+  private val autostart =
+    system.settings.config.getStringList("pekko.extensions").contains(classOf[PodDeletionCost].getName)
+
+  if (autostart) {
+    log.info("PodDeletionCost loaded through 'pekko.extensions' auto-starting itself.")
+    try {
+      PodDeletionCost(system).start()
+    } catch {
+      case NonFatal(ex) =>
+        log.error(ex, "Failed to autostart PodDeletionCost extension")
+    }
+  }
+}
+
+object PodDeletionCost extends ExtensionId[PodDeletionCost] with ExtensionIdProvider {
+
+  override def lookup: PodDeletionCost.type = PodDeletionCost
+
+  override def get(system: ActorSystem): PodDeletionCost = super.get(system)
+
+  override def get(system: ClassicActorSystemProvider): PodDeletionCost = super.get(system)
+
+  override def createExtension(system: ExtendedActorSystem): PodDeletionCost = new PodDeletionCost()(system)
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[kubernetes] object Internal {
+    sealed trait BootstrapStep
+    case object NotRunning extends BootstrapStep
+    case object Initializing extends BootstrapStep
+  }
+
+}
