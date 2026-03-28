@@ -115,11 +115,7 @@ lazy val management = pekkoModule("management")
   .enablePlugins(AutomateHeaderPlugin, ReproducibleBuildsPlugin)
   .settings(
     name := "pekko-management",
-    libraryDependencies := Dependencies.managementHttp ++ Seq(
-      "com.github.sbt.junit" % "jupiter-interface" % JupiterKeys.jupiterVersion.value % Test,
-      "org.junit.jupiter" % "junit-jupiter-api" % JupiterKeys.junitJupiterVersion.value % Test,
-      "org.junit.jupiter" % "junit-jupiter-engine" % JupiterKeys.junitJupiterVersion.value % Test,
-      "org.junit.platform" % "junit-platform-launcher" % JupiterKeys.junitPlatformVersion.value % Test),
+    libraryDependencies := Dependencies.managementHttp ++ junitDependencies.value,
     mimaPreviousArtifactsSet)
 
 lazy val managementPki = pekkoModule("management-pki")
@@ -149,11 +145,7 @@ lazy val managementClusterHttp = pekkoModule("management-cluster-http")
   .enablePlugins(AutomateHeaderPlugin, ReproducibleBuildsPlugin)
   .settings(
     name := "pekko-management-cluster-http",
-    libraryDependencies := Dependencies.managementClusterHttp ++ Seq(
-      "com.github.sbt.junit" % "jupiter-interface" % JupiterKeys.jupiterVersion.value % Test,
-      "org.junit.jupiter" % "junit-jupiter-api" % JupiterKeys.junitJupiterVersion.value % Test,
-      "org.junit.jupiter" % "junit-jupiter-engine" % JupiterKeys.junitJupiterVersion.value % Test,
-      "org.junit.platform" % "junit-platform-launcher" % JupiterKeys.junitPlatformVersion.value % Test),
+    libraryDependencies := Dependencies.managementClusterHttp ++ junitDependencies.value,
     // following is needed by Agrona lib
     // https://github.com/aeron-io/agrona/wiki/Change-Log#200-2024-12-17
     Test / fork := true,
@@ -165,11 +157,7 @@ lazy val managementClusterBootstrap = pekkoModule("management-cluster-bootstrap"
   .enablePlugins(AutomateHeaderPlugin, ReproducibleBuildsPlugin)
   .settings(
     name := "pekko-management-cluster-bootstrap",
-    libraryDependencies := Dependencies.managementClusterBootstrap ++ Seq(
-      "com.github.sbt.junit" % "jupiter-interface" % JupiterKeys.jupiterVersion.value % Test,
-      "org.junit.jupiter" % "junit-jupiter-api" % JupiterKeys.junitJupiterVersion.value % Test,
-      "org.junit.jupiter" % "junit-jupiter-engine" % JupiterKeys.junitJupiterVersion.value % Test,
-      "org.junit.platform" % "junit-platform-launcher" % JupiterKeys.junitPlatformVersion.value % Test),
+    libraryDependencies := Dependencies.managementClusterBootstrap ++ junitDependencies.value,
     // following is needed by Agrona lib
     // https://github.com/aeron-io/agrona/wiki/Change-Log#200-2024-12-17
     Test / fork := true,
@@ -190,7 +178,7 @@ lazy val rollingUpdateKubernetes = pekkoModule("rolling-update-kubernetes")
   .enablePlugins(AutomateHeaderPlugin, ReproducibleBuildsPlugin)
   .settings(
     name := "pekko-rolling-update-kubernetes",
-    libraryDependencies := Dependencies.rollingUpdateKubernetes,
+    libraryDependencies := Dependencies.rollingUpdateKubernetes ++ junitDependencies.value,
     mimaPreviousArtifacts := Set.empty)
   .dependsOn(managementPki)
 
@@ -341,6 +329,14 @@ lazy val docs = project
         IO.copy(List(dir / "pekko-management-root-licenses.md" -> targetFile)).toList
       }
     }.taskValue)
+
+lazy val junitDependencies = Def.setting {
+  Seq(
+    "com.github.sbt.junit" % "jupiter-interface" % JupiterKeys.jupiterVersion.value % Test,
+    "org.junit.jupiter" % "junit-jupiter-api" % JupiterKeys.junitJupiterVersion.value % Test,
+    "org.junit.jupiter" % "junit-jupiter-engine" % JupiterKeys.junitJupiterVersion.value % Test,
+    "org.junit.platform" % "junit-platform-launcher" % JupiterKeys.junitPlatformVersion.value % Test)
+}
 
 def pekkoModule(moduleName: String): Project =
   Project(id = moduleName, base = file(moduleName))
