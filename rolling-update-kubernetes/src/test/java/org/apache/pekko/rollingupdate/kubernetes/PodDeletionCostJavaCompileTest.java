@@ -24,6 +24,5 @@ public class PodDeletionCostJavaCompileTest {
   }
 
   @Test
-  public void compileOnly() {
-  }
+  public void compileOnly() {}
 }
