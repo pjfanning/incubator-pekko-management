@@ -234,14 +234,14 @@ import com.typesafe.config.Config
             val newPodCost =
               PodCost(podName, newCost, selfUniqueAddress.address.toString, selfUniqueAddress.longUid, now)
             val newPods = cr.pods.filterNot { podCost =>
-                // remove entry that is to be added for this podName
-                podCost.podName == podName ||
-                // remove entries that don't exist in the cluster membership any more
-                (podCost.uniqueAddress.address.system == selfUniqueAddress.address.system && // only same cluster
-                now - podCost.time > cleanupAfter.toMillis && // in case new member hasn't been seen yet
-                !membersByAgeDesc.exists(_.uniqueAddress == podCost.uniqueAddress) // removed, not in cluster membership
-                )
-              } :+ newPodCost
+              // remove entry that is to be added for this podName
+              podCost.podName == podName ||
+              // remove entries that don't exist in the cluster membership any more
+              (podCost.uniqueAddress.address.system == selfUniqueAddress.address.system && // only same cluster
+              now - podCost.time > cleanupAfter.toMillis && // in case new member hasn't been seen yet
+              !membersByAgeDesc.exists(_.uniqueAddress == podCost.uniqueAddress) // removed, not in cluster membership
+              )
+            } :+ newPodCost
             kubernetesApi.updatePodCostResource(crName, cr.version, newPods)
           }
         updatePodCostResourceResult(response)

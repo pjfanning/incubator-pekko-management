@@ -131,7 +131,7 @@ import javax.net.ssl.TrustManager
             log.info("PodCost {} does not exist, creating", crName)
             createPodCostResource(crName).flatMap {
               case Some(created) => Future.successful(created)
-              case None =>
+              case None          =>
                 if (tries < maxTries) loop(tries + 1)
                 else Future.failed(new PodCostException(s"Unable to create or read PodCost after $maxTries tries"))
             }
@@ -256,7 +256,8 @@ PUTs must contain resourceVersions. Response:
   }
 
   private def pathForPodCostResource(crName: String): Uri.Path =
-    Uri.Path.Empty / "apis" / "pekko.apache.org" / "v1" / "namespaces" / namespace / "podcosts" / crName
+    Uri.Path.Empty / "apis" / "pekko.apache.org" / "v1" / "namespaces" / namespace / "podcosts" /
+    crName
       .replaceAll("[^\\d\\w\\-\\.]", "")
       .toLowerCase
 
