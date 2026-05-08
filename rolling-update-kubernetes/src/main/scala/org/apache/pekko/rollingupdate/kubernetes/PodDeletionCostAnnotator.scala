@@ -8,90 +8,65 @@
  */
 
 /*
- * Copyright (C) 2017-2021 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2017-2023 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package org.apache.pekko.rollingupdate.kubernetes
 
-import org.apache.pekko.actor.Actor
-import org.apache.pekko.actor.ActorLogging
-import org.apache.pekko.actor.ActorSystem
-import org.apache.pekko.actor.Timers
-import org.apache.pekko.annotation.InternalApi
-import org.apache.pekko.cluster.Cluster
-import org.apache.pekko.cluster.ClusterEvent
-import org.apache.pekko.cluster.Member
-import org.apache.pekko.event.Logging.InfoLevel
-import org.apache.pekko.event.Logging.WarningLevel
-import org.apache.pekko.http.scaladsl.ConnectionContext
-import org.apache.pekko.http.scaladsl.Http
-import org.apache.pekko.http.scaladsl.HttpsConnectionContext
-import org.apache.pekko.http.scaladsl.model.StatusCodes.ClientError
-import org.apache.pekko.http.scaladsl.model._
-import org.apache.pekko.pattern.pipe
-import org.apache.pekko.pki.kubernetes.PemManagersProvider
-import org.apache.pekko.rollingupdate.OlderCostsMore
-import org.apache.pekko.rollingupdate.kubernetes.PodDeletionCostAnnotator.GiveUp
-import org.apache.pekko.rollingupdate.kubernetes.PodDeletionCostAnnotator.PodAnnotated
-import org.apache.pekko.rollingupdate.kubernetes.PodDeletionCostAnnotator.RetryAnnotate
-import org.apache.pekko.rollingupdate.kubernetes.PodDeletionCostAnnotator.RetryTimerId
-import org.apache.pekko.rollingupdate.kubernetes.PodDeletionCostAnnotator.ScheduleRetry
-import org.apache.pekko.rollingupdate.kubernetes.PodDeletionCostAnnotator.toResult
-import com.typesafe.config.Config
-
-import java.security.KeyStore
-import java.security.SecureRandom
+import java.util.concurrent.ThreadLocalRandom
 import java.util.concurrent.TimeUnit
-import javax.net.ssl.KeyManager
-import javax.net.ssl.KeyManagerFactory
-import javax.net.ssl.SSLContext
-import javax.net.ssl.TrustManager
+
 import scala.collection.immutable
 import scala.collection.immutable.SortedSet
-import scala.concurrent.ExecutionContextExecutor
+import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.DurationLong
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
 
+import org.apache.pekko.Done
+import org.apache.pekko.actor.Actor
+import org.apache.pekko.actor.ActorLogging
+import org.apache.pekko.actor.ActorSystem
+import org.apache.pekko.actor.Props
+import org.apache.pekko.actor.Status
+import org.apache.pekko.actor.Timers
+import org.apache.pekko.annotation.InternalApi
+import org.apache.pekko.cluster.Cluster
+import org.apache.pekko.cluster.ClusterEvent
+import org.apache.pekko.cluster.Member
+import org.apache.pekko.cluster.UniqueAddress
+import org.apache.pekko.event.Logging.InfoLevel
+import org.apache.pekko.event.Logging.WarningLevel
+import org.apache.pekko.pattern.pipe
+import org.apache.pekko.rollingupdate.OlderCostsMore
+import com.typesafe.config.Config
+
 /**
  * INTERNAL API
  *
- * Actor responsible to annotate the hosting pod with the pod-deletion-cost.
+ * Actor responsible to annotate the hosting pod with the pod-deletion-cost or
+ * update the PodCost CR depending on configuration.
  * It will automatically retry upon a fixed-configurable delay if the annotation fails.
  */
 @InternalApi private[kubernetes] final class PodDeletionCostAnnotator(
     settings: KubernetesSettings,
-    apiToken: String,
-    podNamespace: String,
-    costSettings: PodDeletionCostSettings)
+    costSettings: PodDeletionCostSettings,
+    kubernetesApi: KubernetesApi,
+    crName: Option[String])
     extends Actor
     with ActorLogging
     with Timers {
+  import PodDeletionCostAnnotator._
+
+  private val podName = settings.podName
+  private val resourceLogDescription = if (crName.isDefined) "PodCost CR" else "pod-deletion-cost annotation"
+
   private val cluster = Cluster(context.system)
-  private val http = Http()(context.system)
 
   Cluster(context.system).subscribe(context.self, classOf[ClusterEvent.MemberUp], classOf[ClusterEvent.MemberRemoved])
 
-  private lazy val sslContext = {
-    val certificates = PemManagersProvider.loadCertificates(settings.apiCaPath)
-    val factory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm)
-    val keyStore = KeyStore.getInstance("PKCS12")
-    keyStore.load(null)
-    factory.init(keyStore, Array.empty)
-    val km: Array[KeyManager] = factory.getKeyManagers
-    val tm: Array[TrustManager] =
-      PemManagersProvider.buildTrustManagers(certificates)
-    val random: SecureRandom = new SecureRandom
-    val sslContext = SSLContext.getInstance("TLSv1.2")
-    sslContext.init(km, tm, random)
-    sslContext
-  }
-  private val clientSslContext: Option[HttpsConnectionContext] =
-    if (settings.secure) Some(ConnectionContext.httpsClient(sslContext)) else None
-
-  implicit val dispatcher: ExecutionContextExecutor = context.system.dispatcher
-  def receive = idle(0, SortedSet.empty(Member.ageOrdering), 0)
+  def receive: Receive = idle(0, SortedSet.empty(Member.ageOrdering), 0)
 
   private def idle(deletionCost: Int, membersByAgeDesc: SortedSet[Member], retryNr: Int): Receive = {
     case cs @ ClusterEvent.CurrentClusterState(members, _, _, _, _) =>
@@ -107,8 +82,8 @@ import scala.util.control.NonFatal
       updateIfNewCost(deletionCost, membersByAgeDesc - m, retryNr)
 
     case PodAnnotated =>
-      log.debug("Annotation updated successfully to {}", deletionCost)
-      // cancelling an eventual retry in case the annotation succeeded in the meantime
+      log.debug("{} updated successfully to [{}]", resourceLogDescription, deletionCost)
+      // cancelling an eventual retry in case the operation succeeded in the meantime
       timers.cancel(RetryTimerId)
       context.become(idle(deletionCost, membersByAgeDesc, 0))
 
@@ -116,16 +91,29 @@ import scala.util.control.NonFatal
       val ll = if (retryNr < 3) InfoLevel else WarningLevel
       log.log(
         ll,
-        s"Failed to update annotation: [$ex]. Scheduled retry with fixed delay of ${costSettings.retryDelay}, retry number $retryNr.")
+        s"Failed to update $resourceLogDescription: [$ex]. Scheduled retry with fixed delay of ${costSettings.retryDelay}, retry number $retryNr.")
 
-      timers.startSingleTimer(RetryTimerId, RetryAnnotate, costSettings.retryDelay)
+      val retryDelay =
+        if (crName.isDefined)
+          // add some random delay to minimize risk of conflicts
+          (costSettings.retryDelay.toMillis * (1 + ThreadLocalRandom.current().nextDouble(0.1))).toLong.milliseconds
+        else
+          costSettings.retryDelay
+      timers.startSingleTimer(RetryTimerId, RetryAnnotate, retryDelay)
       context.become(underRetryBackoff(membersByAgeDesc, retryNr))
 
     case GiveUp(er: String) =>
       log.error(
-        "There was a client error when trying to set pod-deletion-cost annotation. " +
+        "There was a client error when trying to set {}. " +
         "Not retrying, check configuration. Error: {}",
+        resourceLogDescription,
         er)
+
+    case Status.Failure(exc) =>
+      throw new IllegalStateException(
+        "Unexpected failure, Future failure should have been recovered " +
+        "to message before pipeTo self. This is a bug.",
+        exc)
 
     case msg => log.debug("Ignoring message {}", msg)
   }
@@ -141,6 +129,12 @@ import scala.util.control.NonFatal
 
     case RetryAnnotate =>
       updateIfNewCost(Int.MinValue, membersByAgeDesc, retryNr + 1)
+
+    case Status.Failure(exc) =>
+      throw new IllegalStateException(
+        "Unexpected failure, Future failure should have been recovered " +
+        "to message before pipeTo self. This is a bug.",
+        exc)
 
     case msg => log.debug("Under retry backoff, ignoring message {}", msg)
   }
@@ -158,18 +152,27 @@ import scala.util.control.NonFatal
 
     if (newCost != existingCost) {
       log.info(
-        "Updating pod-deletion-cost annotation for pod: [{}] with cost: [{}]. Namespace: [{}]",
-        settings.podName,
+        "Updating {} for pod: [{}] with cost: [{}]. Namespace: [{}]",
+        resourceLogDescription,
+        podName,
         newCost,
-        podNamespace
+        kubernetesApi.namespace
       )
-      val request = ApiRequests.podDeletionCost(settings, apiToken, podNamespace, newCost)
-      val response =
-        clientSslContext.map(http.singleRequest(request, _)).getOrElse(http.singleRequest(request))
 
-      toResult(response)(context.system).pipeTo(self)
+      implicit val dispatcher: ExecutionContext = context.system.dispatcher
+      updatePodCost(
+        kubernetesApi,
+        crName,
+        podName,
+        newCost,
+        cluster.selfUniqueAddress,
+        membersByAgeDesc,
+        settings.customResourceSettings.cleanupAfter)(context.system).pipeTo(self)
+
       context.become(idle(newCost, membersByAgeDesc, retryNr))
-    } else context.become(idle(existingCost, membersByAgeDesc, retryNr))
+    } else {
+      context.become(idle(existingCost, membersByAgeDesc, retryNr))
+    }
   }
 
 }
@@ -206,23 +209,72 @@ import scala.util.control.NonFatal
   case class ScheduleRetry(cause: String) extends RequestResult
   case class GiveUp(cause: String) extends RequestResult
 
-  private[kubernetes] def toResult(futResponse: Future[HttpResponse])(
+  def props(
+      settings: KubernetesSettings,
+      costSettings: PodDeletionCostSettings,
+      kubernetesApi: KubernetesApi,
+      crName: Option[String]
+  ): Props =
+    Props(new PodDeletionCostAnnotator(settings, costSettings, kubernetesApi, crName))
+
+  private def updatePodCost(
+      kubernetesApi: KubernetesApi,
+      crNameOpt: Option[String],
+      podName: String,
+      newCost: Int,
+      selfUniqueAddress: UniqueAddress,
+      membersByAgeDesc: immutable.SortedSet[Member],
+      cleanupAfter: FiniteDuration)(implicit system: ActorSystem): Future[RequestResult] = {
+    import system.dispatcher
+    crNameOpt match {
+      case Some(crName) =>
+        val response =
+          kubernetesApi.readOrCreatePodCostResource(crName).flatMap { cr =>
+            val now = System.currentTimeMillis()
+            val newPodCost =
+              PodCost(podName, newCost, selfUniqueAddress.address.toString, selfUniqueAddress.longUid, now)
+            val newPods = cr.pods.filterNot { podCost =>
+                // remove entry that is to be added for this podName
+                podCost.podName == podName ||
+                // remove entries that don't exist in the cluster membership any more
+                (podCost.uniqueAddress.address.system == selfUniqueAddress.address.system && // only same cluster
+                now - podCost.time > cleanupAfter.toMillis && // in case new member hasn't been seen yet
+                !membersByAgeDesc.exists(_.uniqueAddress == podCost.uniqueAddress) // removed, not in cluster membership
+                )
+              } :+ newPodCost
+            kubernetesApi.updatePodCostResource(crName, cr.version, newPods)
+          }
+        updatePodCostResourceResult(response)
+      case None =>
+        val response = kubernetesApi.updatePodDeletionCostAnnotation(podName, newCost)
+        updatePodDeletionCostAnnotationResult(response)
+    }
+  }
+
+  private def updatePodDeletionCostAnnotationResult(futResponse: Future[Done])(
       implicit system: ActorSystem): Future[RequestResult] = {
     import system.dispatcher
     futResponse
       .map {
-        case HttpResponse(status, _, e, _) if status.isSuccess() =>
-          e.discardBytes()
-          PodAnnotated
-        case HttpResponse(s @ ClientError(_), _, e, _) =>
-          e.discardBytes()
-          GiveUp(s.toString())
-        case HttpResponse(status, _, e, _) =>
-          e.discardBytes()
-          ScheduleRetry(s"Request failed with status=$status")
+        case Done => PodAnnotated
       }
       .recover {
-        case NonFatal(e) => ScheduleRetry(e.getMessage)
+        case e: PodCostClientException => GiveUp(e.getMessage)
+        case NonFatal(e)               => ScheduleRetry(e.getMessage)
+      }
+  }
+
+  private def updatePodCostResourceResult(futResponse: Future[Either[PodCostResource, PodCostResource]])(
+      implicit system: ActorSystem): Future[RequestResult] = {
+    import system.dispatcher
+    futResponse
+      .map {
+        case Right(_) => PodAnnotated
+        case Left(_)  => ScheduleRetry("Request failed with conflict")
+      }
+      .recover {
+        case e: PodCostClientException => GiveUp(e.getMessage)
+        case NonFatal(e)               => ScheduleRetry(e.getMessage)
       }
   }
 }

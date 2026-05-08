@@ -15,7 +15,6 @@ package org.apache.pekko.rollingupdate.kubernetes
 
 import org.apache.pekko.actor.ActorSystem
 import org.apache.pekko.actor.Address
-import org.apache.pekko.actor.Props
 import org.apache.pekko.cluster.Cluster
 import org.apache.pekko.cluster.ClusterEvent.MemberUp
 import org.apache.pekko.cluster.Member
@@ -99,16 +98,27 @@ class PodDeletionCostAnnotatorSpec
       namespace = Some(namespace),
       namespacePath = "",
       podName = podName,
-      secure = false)
+      secure = false,
+      apiServiceRequestTimeout = 2.seconds,
+      customResourceSettings = new CustomResourceSettings(enabled = false, crName = None, cleanupAfter = 60.seconds)
+    )
   }
 
-  private def annotatorProps(pod: String) = Props(
-    classOf[PodDeletionCostAnnotator],
-    settings(pod),
-    "apiToken",
-    namespace,
-    PodDeletionCostSettings(system.settings.config.getConfig("pekko.rollingupdate.kubernetes"))
-  )
+  private def kubernetesApi(pod: String) =
+    new KubernetesApiImpl(
+      system,
+      settings(pod),
+      namespace,
+      apiToken = "apiToken",
+      clientHttpsConnectionContext = None)
+
+  private def annotatorProps(pod: String) =
+    PodDeletionCostAnnotator.props(
+      settings(pod),
+      PodDeletionCostSettings(system.settings.config.getConfig("pekko.rollingupdate.kubernetes")),
+      kubernetesApi(pod),
+      crName = None
+    )
 
   override implicit val patienceConfig: PatienceConfig =
     PatienceConfig(timeout = Span(5, Seconds), interval = Span(100, Millis))
@@ -241,7 +251,7 @@ class PodDeletionCostAnnotatorSpec
 
       assertState(scenarioName, "FAILING")
 
-      val underTest = expectLogWarning(".*Failed to update annotation:.*") {
+      val underTest = expectLogWarning(".*Failed to update pod-deletion-cost annotation:.*") {
         system.actorOf(annotatorProps(podName1))
       }
 

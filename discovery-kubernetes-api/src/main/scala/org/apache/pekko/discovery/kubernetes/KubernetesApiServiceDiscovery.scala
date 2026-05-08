@@ -8,7 +8,7 @@
  */
 
 /*
- * Copyright (C) 2017-2021 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2017-2023 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package org.apache.pekko.discovery.kubernetes
@@ -17,7 +17,9 @@ import java.net.InetAddress
 import java.nio.charset.StandardCharsets
 import java.nio.file.{ Files, Paths }
 import java.security.{ KeyStore, SecureRandom }
+import scala.collection.immutable
 import scala.collection.immutable.Seq
+import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Try
@@ -32,7 +34,8 @@ import pekko.discovery.ServiceDiscovery.{ Resolved, ResolvedTarget }
 import pekko.discovery.kubernetes.JsonFormat._
 import pekko.discovery.kubernetes.KubernetesApiServiceDiscovery.{ targets, KubernetesApiException }
 import pekko.discovery.{ Lookup, ServiceDiscovery }
-import pekko.event.{ LogSource, Logging }
+import pekko.dispatch.Dispatchers.DefaultBlockingDispatcherId
+import pekko.event.Logging
 import pekko.http.scaladsl.HttpsConnectionContext
 import pekko.http.scaladsl._
 import pekko.http.scaladsl.model._
@@ -57,7 +60,7 @@ object KubernetesApiServiceDiscovery {
       podNamespace: String,
       podDomain: String,
       rawIp: Boolean,
-      containerName: Option[String]): Seq[ResolvedTarget] =
+      containerName: Option[String]): immutable.Seq[ResolvedTarget] =
     for {
       item <- podList.items
       if item.metadata.flatMap(_.deletionTimestamp).isEmpty
@@ -73,7 +76,7 @@ object KubernetesApiServiceDiscovery {
       // Maybe port is an Option of a port, and will be None if no portName was requested
       maybePort <- portName match {
         case None =>
-          Seq(None)
+          List(None)
         case Some(name) =>
           for {
             container <- itemSpec.containers
@@ -92,6 +95,10 @@ object KubernetesApiServiceDiscovery {
 
   class KubernetesApiException(msg: String) extends RuntimeException(msg) with NoStackTrace
 
+  private[kubernetes] final case class KubernetesSetup(
+      podNamespace: String,
+      apiToken: String,
+      clientHttpsConnectionContext: HttpsConnectionContext)
 }
 
 /**
@@ -101,54 +108,60 @@ object KubernetesApiServiceDiscovery {
 class KubernetesApiServiceDiscovery(settings: Settings)(
     implicit system: ActorSystem) extends ServiceDiscovery {
 
-  import system.dispatcher
+  import KubernetesApiServiceDiscovery.KubernetesSetup
+  import org.apache.pekko.discovery.kubernetes.KubernetesApiServiceDiscovery._
 
   private val http = Http()
 
   def this()(implicit system: ActorSystem) = this(Settings(system))
 
-  private val log = Logging(system, getClass)(LogSource.fromClass)
-
-  private val sslContext = {
-    val certificates = PemManagersProvider.loadCertificates(settings.apiCaPath)
-
-    val factory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm)
-    val keyStore = KeyStore.getInstance("PKCS12")
-    keyStore.load(null)
-    factory.init(keyStore, Array.empty)
-    val km: Array[KeyManager] = factory.getKeyManagers
-    val tm: Array[TrustManager] =
-      PemManagersProvider.buildTrustManagers(certificates)
-    val random: SecureRandom = new SecureRandom
-    val sslContext = SSLContext.getInstance(settings.tlsVersion)
-    sslContext.init(km, tm, random)
-    sslContext
-  }
-
-  private val clientSslContext: HttpsConnectionContext = ConnectionContext.httpsClient(sslContext)
+  private val log = Logging(system, classOf[KubernetesApiServiceDiscovery])
 
   log.debug("Settings {}", settings)
+
+  private val kubernetesSetup: Future[KubernetesSetup] = {
+    implicit val blockingDispatcher: ExecutionContext = system.dispatchers.lookup(DefaultBlockingDispatcherId)
+    for {
+      apiToken: String <- Future {
+        readConfigVarFromFilesystem(settings.apiTokenPath, "api-token").getOrElse("")
+      }
+      namespace: String <- Future {
+        settings.podNamespace
+          .orElse(readConfigVarFromFilesystem(settings.podNamespacePath, "pod-namespace"))
+          .getOrElse("default")
+      }
+      httpsContext <- Future(clientHttpsConnectionContext())
+    } yield {
+      KubernetesSetup(namespace, apiToken, httpsContext)
+    }
+  }
+
+  import system.dispatcher
 
   override def lookup(query: Lookup, resolveTimeout: FiniteDuration): Future[Resolved] = {
     val labelSelector = settings.podLabelSelector(query.serviceName)
 
-    log.info(
-      "Querying for pods with label selector: [{}]. Namespace: [{}]. Port: [{}]",
-      labelSelector,
-      podNamespace,
-      query.portName)
-
     for {
-      request <- optionToFuture(
-        podRequest(apiToken, podNamespace, labelSelector),
-        s"Unable to form request; check Kubernetes environment (expecting env vars ${settings.apiServiceHostEnvName}, ${settings.apiServicePortEnvName})")
+      setup <- kubernetesSetup
 
-      response <- http.singleRequest(request, clientSslContext).map(decodeResponse)
+      request <- {
+        log.info(
+          "Querying for pods with label selector: [{}]. Namespace: [{}]. Port: [{}]",
+          labelSelector,
+          setup.podNamespace,
+          query.portName)
+
+        optionToFuture(
+          podRequest(setup.apiToken, setup.podNamespace, labelSelector),
+          s"Unable to form request; check Kubernetes environment (expecting env vars ${settings.apiServiceHostEnvName}, ${settings.apiServicePortEnvName})"
+        )
+      }
+
+      response <- http.singleRequest(request, setup.clientHttpsConnectionContext).map(decodeResponse)
 
       entity <- response.entity.toStrict(resolveTimeout)
 
       podList <- {
-
         response.status match {
           case StatusCodes.OK =>
             log.debug("Kubernetes API entity: [{}]", entity.data.utf8String)
@@ -176,15 +189,13 @@ class KubernetesApiServiceDiscovery(settings: Settings)(
                 other,
                 body)
             }
-
             Future.failed(new KubernetesApiException(s"Non-200 from Kubernetes API server: $other"))
         }
-
       }
 
     } yield {
       val addresses =
-        targets(podList, query.portName, podNamespace, settings.podDomain, settings.rawIp, settings.containerName)
+        targets(podList, query.portName, setup.podNamespace, settings.podDomain, settings.rawIp, settings.containerName)
       if (addresses.isEmpty && podList.items.nonEmpty) {
         if (log.isInfoEnabled) {
           val containerPortNames = podList.items.flatMap(_.spec).flatMap(_.containers).flatMap(_.ports).flatten.toSet
@@ -200,11 +211,43 @@ class KubernetesApiServiceDiscovery(settings: Settings)(
     }
   }
 
-  private val apiToken = readConfigVarFromFilesystem(settings.apiTokenPath, "api-token").getOrElse("")
+  private def optionToFuture[T](option: Option[T], failMsg: String): Future[T] =
+    option.fold(Future.failed[T](new NoSuchElementException(failMsg)))(Future.successful)
 
-  private val podNamespace = settings.podNamespace
-    .orElse(readConfigVarFromFilesystem(settings.podNamespacePath, "pod-namespace"))
-    .getOrElse("default")
+  private def podRequest(token: String, namespace: String, labelSelector: String) =
+    for {
+      host <- sys.env.get(settings.apiServiceHostEnvName)
+      portStr <- sys.env.get(settings.apiServicePortEnvName)
+      port <- Try(portStr.toInt).toOption
+    } yield {
+      val path = Uri.Path.Empty / "api" / "v1" / "namespaces" / namespace / "pods"
+      val query = Uri.Query("labelSelector" -> labelSelector)
+      val uri = Uri.from(scheme = "https", host = host, port = port).withPath(path).withQuery(query)
+
+      val authHeaders = immutable.Seq(Authorization(OAuth2BearerToken(token)))
+      val acceptEncodingHeader = HttpEncodings.getForKey(settings.httpRequestAcceptEncoding)
+        .map(httpEncoding => AcceptEncoding.create(httpEncoding))
+      HttpRequest(uri = uri, headers = authHeaders ++ acceptEncodingHeader)
+    }
+
+  /**
+   * This uses blocking IO, and so should only be used at startup from blocking dispatcher.
+   */
+  private def clientHttpsConnectionContext(): HttpsConnectionContext = {
+    val certificates = PemManagersProvider.loadCertificates(settings.apiCaPath)
+
+    val factory = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm)
+    val keyStore = KeyStore.getInstance("PKCS12")
+    keyStore.load(null)
+    factory.init(keyStore, Array.empty)
+    val km: Array[KeyManager] = factory.getKeyManagers
+    val tm: Array[TrustManager] =
+      PemManagersProvider.buildTrustManagers(certificates)
+    val random: SecureRandom = new SecureRandom
+    val sslContext = SSLContext.getInstance(settings.tlsVersion)
+    sslContext.init(km, tm, random)
+    ConnectionContext.httpsClient(sslContext)
+  }
 
   /**
    * This uses blocking IO, and so should only be used to read configuration at startup.
@@ -224,25 +267,6 @@ class KubernetesApiServiceDiscovery(settings: Settings)(
       None
     }
   }
-
-  private def optionToFuture[T](option: Option[T], failMsg: String): Future[T] =
-    option.fold(Future.failed[T](new NoSuchElementException(failMsg)))(Future.successful)
-
-  private def podRequest(token: String, namespace: String, labelSelector: String) =
-    for {
-      host <- sys.env.get(settings.apiServiceHostEnvName)
-      portStr <- sys.env.get(settings.apiServicePortEnvName)
-      port <- Try(portStr.toInt).toOption
-    } yield {
-      val path = Uri.Path.Empty / "api" / "v1" / "namespaces" / namespace / "pods"
-      val query = Uri.Query("labelSelector" -> labelSelector)
-      val uri = Uri.from(scheme = "https", host = host, port = port).withPath(path).withQuery(query)
-
-      val authHeaders = Seq(Authorization(OAuth2BearerToken(token)))
-      val acceptEncodingHeader = HttpEncodings.getForKey(settings.httpRequestAcceptEncoding)
-        .map(httpEncoding => AcceptEncoding.create(httpEncoding))
-      HttpRequest(uri = uri, headers = authHeaders ++ acceptEncodingHeader)
-    }
 
   private def decodeResponse(response: HttpResponse): HttpResponse = {
     val decoder = response.encoding match {
