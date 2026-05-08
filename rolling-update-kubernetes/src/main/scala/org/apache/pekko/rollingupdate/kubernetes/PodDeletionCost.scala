@@ -50,7 +50,7 @@ final class PodDeletionCost(implicit system: ExtendedActorSystem) extends Extens
             val name =
               k8sSettings.customResourceSettings.crName.getOrElse(KubernetesApi.makeDNS1039Compatible(system.name))
             log.info(
-              "Starting PodDeletionCost for podName [{}], [{}] oldest will written to CR [{}].",
+              "Starting PodDeletionCost for podName [{}], [{}] oldest will be written to CR [{}].",
               k8sSettings.podName,
               costSettings.annotatedPodsNr,
               name)
