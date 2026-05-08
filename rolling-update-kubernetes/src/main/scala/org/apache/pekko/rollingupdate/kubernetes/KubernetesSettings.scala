@@ -14,9 +14,9 @@
 package org.apache.pekko.rollingupdate.kubernetes
 
 import scala.concurrent.duration._
+import scala.jdk.DurationConverters._
 
 import org.apache.pekko
-import pekko.util.JavaDurationConverters._
 import pekko.annotation.InternalApi
 import com.typesafe.config.Config
 
