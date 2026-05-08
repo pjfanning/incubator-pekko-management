@@ -18,10 +18,11 @@ import java.text.Normalizer
 import scala.collection.immutable
 import scala.concurrent.Future
 
-import org.apache.pekko.Done
-import org.apache.pekko.actor.AddressFromURIString
-import org.apache.pekko.annotation.InternalApi
-import org.apache.pekko.cluster.UniqueAddress
+import org.apache.pekko
+import pekko.Done
+import pekko.actor.AddressFromURIString
+import pekko.annotation.InternalApi
+import pekko.cluster.UniqueAddress
 
 /**
  * INTERNAL API

@@ -16,13 +16,15 @@ package org.apache.pekko.rollingupdate.kubernetes
 import java.util.concurrent.atomic.AtomicBoolean
 import scala.concurrent.ExecutionContext
 import scala.util.control.NonFatal
-import org.apache.pekko.actor.ActorSystem
-import org.apache.pekko.actor.ClassicActorSystemProvider
-import org.apache.pekko.actor.ExtendedActorSystem
-import org.apache.pekko.actor.Extension
-import org.apache.pekko.actor.ExtensionId
-import org.apache.pekko.actor.ExtensionIdProvider
-import org.apache.pekko.event.Logging
+
+import org.apache.pekko
+import pekko.actor.ActorSystem
+import pekko.actor.ClassicActorSystemProvider
+import pekko.actor.ExtendedActorSystem
+import pekko.actor.Extension
+import pekko.actor.ExtensionId
+import pekko.actor.ExtensionIdProvider
+import pekko.event.Logging
 
 final class PodDeletionCost(implicit system: ExtendedActorSystem) extends Extension {
 

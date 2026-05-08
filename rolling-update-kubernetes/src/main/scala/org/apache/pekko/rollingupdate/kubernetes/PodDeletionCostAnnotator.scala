@@ -24,22 +24,23 @@ import scala.concurrent.duration.DurationLong
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
 
-import org.apache.pekko.Done
-import org.apache.pekko.actor.Actor
-import org.apache.pekko.actor.ActorLogging
-import org.apache.pekko.actor.ActorSystem
-import org.apache.pekko.actor.Props
-import org.apache.pekko.actor.Status
-import org.apache.pekko.actor.Timers
-import org.apache.pekko.annotation.InternalApi
-import org.apache.pekko.cluster.Cluster
-import org.apache.pekko.cluster.ClusterEvent
-import org.apache.pekko.cluster.Member
-import org.apache.pekko.cluster.UniqueAddress
-import org.apache.pekko.event.Logging.InfoLevel
-import org.apache.pekko.event.Logging.WarningLevel
-import org.apache.pekko.pattern.pipe
-import org.apache.pekko.rollingupdate.OlderCostsMore
+import org.apache.pekko
+import pekko.Done
+import pekko.actor.Actor
+import pekko.actor.ActorLogging
+import pekko.actor.ActorSystem
+import pekko.actor.Props
+import pekko.actor.Status
+import pekko.actor.Timers
+import pekko.annotation.InternalApi
+import pekko.cluster.Cluster
+import pekko.cluster.ClusterEvent
+import pekko.cluster.Member
+import pekko.cluster.UniqueAddress
+import pekko.event.Logging.InfoLevel
+import pekko.event.Logging.WarningLevel
+import pekko.pattern.pipe
+import pekko.rollingupdate.OlderCostsMore
 import com.typesafe.config.Config
 
 /**

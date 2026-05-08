@@ -13,19 +13,20 @@
 
 package org.apache.pekko.rollingupdate.kubernetes
 
-import org.apache.pekko.actor.ActorSystem
-import org.apache.pekko.actor.Address
-import org.apache.pekko.cluster.Cluster
-import org.apache.pekko.cluster.ClusterEvent.MemberUp
-import org.apache.pekko.cluster.Member
-import org.apache.pekko.cluster.MemberStatus
-import org.apache.pekko.cluster.MemberStatus.Up
-import org.apache.pekko.cluster.UniqueAddress
-import org.apache.pekko.testkit.EventFilter
-import org.apache.pekko.testkit.ImplicitSender
-import org.apache.pekko.testkit.TestKit
-import org.apache.pekko.testkit.TestProbe
-import org.apache.pekko.util.Version
+import org.apache.pekko
+import pekko.actor.ActorSystem
+import pekko.actor.Address
+import pekko.cluster.Cluster
+import pekko.cluster.ClusterEvent.MemberUp
+import pekko.cluster.Member
+import pekko.cluster.MemberStatus
+import pekko.cluster.MemberStatus.Up
+import pekko.cluster.UniqueAddress
+import pekko.testkit.EventFilter
+import pekko.testkit.ImplicitSender
+import pekko.testkit.TestKit
+import pekko.testkit.TestProbe
+import pekko.util.Version
 import com.github.tomakehurst.wiremock.WireMockServer
 import com.github.tomakehurst.wiremock.client.MappingBuilder
 import com.github.tomakehurst.wiremock.client.WireMock

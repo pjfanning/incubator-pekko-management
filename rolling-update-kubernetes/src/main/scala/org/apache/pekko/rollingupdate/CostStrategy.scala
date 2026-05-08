@@ -13,8 +13,9 @@
 
 package org.apache.pekko.rollingupdate
 
-import org.apache.pekko.annotation.InternalApi
-import org.apache.pekko.cluster.Member
+import org.apache.pekko
+import pekko.annotation.InternalApi
+import pekko.cluster.Member
 
 import scala.collection.SortedSet
 

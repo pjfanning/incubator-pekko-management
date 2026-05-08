@@ -17,6 +17,8 @@ import java.net.InetAddress
 import java.nio.charset.StandardCharsets
 import java.nio.file.{ Files, Paths }
 import java.security.{ KeyStore, SecureRandom }
+import javax.net.ssl.{ KeyManager, KeyManagerFactory, SSLContext, TrustManager }
+
 import scala.collection.immutable
 import scala.collection.immutable.Seq
 import scala.concurrent.ExecutionContext
@@ -26,8 +28,6 @@ import scala.util.Try
 import scala.util.control.{ NoStackTrace, NonFatal }
 
 import org.apache.pekko
-import org.apache.pekko.http.javadsl.model.headers.AcceptEncoding
-import org.apache.pekko.http.scaladsl.coding.Coders
 import pekko.actor.ActorSystem
 import pekko.annotation.InternalApi
 import pekko.discovery.ServiceDiscovery.{ Resolved, ResolvedTarget }
@@ -36,14 +36,13 @@ import pekko.discovery.kubernetes.KubernetesApiServiceDiscovery.{ targets, Kuber
 import pekko.discovery.{ Lookup, ServiceDiscovery }
 import pekko.dispatch.Dispatchers.DefaultBlockingDispatcherId
 import pekko.event.Logging
-import pekko.http.scaladsl.HttpsConnectionContext
-import pekko.http.scaladsl._
+import pekko.http.javadsl.model.headers.AcceptEncoding
+import pekko.http.scaladsl.{ HttpsConnectionContext, _ }
+import pekko.http.scaladsl.coding.Coders
 import pekko.http.scaladsl.model._
 import pekko.http.scaladsl.model.headers.{ Authorization, HttpEncodings, OAuth2BearerToken }
 import pekko.http.scaladsl.unmarshalling.Unmarshal
 import pekko.pki.kubernetes.PemManagersProvider
-
-import javax.net.ssl.{ KeyManager, KeyManagerFactory, SSLContext, TrustManager }
 
 object KubernetesApiServiceDiscovery {
 
@@ -109,7 +108,7 @@ class KubernetesApiServiceDiscovery(settings: Settings)(
     implicit system: ActorSystem) extends ServiceDiscovery {
 
   import KubernetesApiServiceDiscovery.KubernetesSetup
-  import org.apache.pekko.discovery.kubernetes.KubernetesApiServiceDiscovery._
+  import pekko.discovery.kubernetes.KubernetesApiServiceDiscovery._
 
   private val http = Http()
 
