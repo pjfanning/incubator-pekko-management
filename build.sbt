@@ -24,6 +24,8 @@ commands := commands.value.filterNot { command =>
 ThisBuild / resolvers += Resolver.ApacheMavenSnapshotsRepo
 ThisBuild / reproducibleBuildsCheckResolver := Resolver.ApacheMavenStagingRepo
 
+ThisBuild / javafmtFormatterCompatibleJavaVersion := 17
+
 ThisBuild / javafmt / excludeFilter := (javafmt / excludeFilter).value || new SimpleFileFilter(
   _.getCanonicalPath.contains(s"${java.io.File.separator}jdoc${java.io.File.separator}")
 )
@@ -78,7 +80,7 @@ lazy val discoveryKubernetesApi = pekkoModule("discovery-kubernetes-api")
   .enablePlugins(AutomateHeaderPlugin, ReproducibleBuildsPlugin)
   .settings(
     name := "pekko-discovery-kubernetes-api",
-    libraryDependencies := Dependencies.discoveryKubernetesApi,
+    libraryDependencies ++= Dependencies.discoveryKubernetesApi,
     mimaPreviousArtifactsSet)
   .dependsOn(managementPki)
 
@@ -86,28 +88,28 @@ lazy val discoveryMarathonApi = pekkoModule("discovery-marathon-api")
   .enablePlugins(AutomateHeaderPlugin, ReproducibleBuildsPlugin)
   .settings(
     name := "pekko-discovery-marathon-api",
-    libraryDependencies := Dependencies.discoveryMarathonApi,
+    libraryDependencies ++= Dependencies.discoveryMarathonApi,
     mimaPreviousArtifactsSet)
 
 lazy val discoveryAwsApi = pekkoModule("discovery-aws-api")
   .enablePlugins(AutomateHeaderPlugin, ReproducibleBuildsPlugin)
   .settings(
     name := "pekko-discovery-aws-api",
-    libraryDependencies := Dependencies.discoveryAwsApi,
+    libraryDependencies ++= Dependencies.discoveryAwsApi,
     mimaPreviousArtifactsSet)
 
 lazy val discoveryAwsApiAsync = pekkoModule("discovery-aws-api-async")
   .enablePlugins(AutomateHeaderPlugin, ReproducibleBuildsPlugin)
   .settings(
     name := "pekko-discovery-aws-api-async",
-    libraryDependencies := Dependencies.discoveryAwsApiAsync,
+    libraryDependencies ++= Dependencies.discoveryAwsApiAsync,
     mimaPreviousArtifactsSet)
 
 lazy val discoveryConsul = pekkoModule("discovery-consul")
   .enablePlugins(AutomateHeaderPlugin, ReproducibleBuildsPlugin)
   .settings(
     name := "pekko-discovery-consul",
-    libraryDependencies := Dependencies.discoveryConsul,
+    libraryDependencies ++= Dependencies.discoveryConsul,
     mimaPreviousArtifactsSet)
 
 // gathers all enabled routes and serves them (HTTP or otherwise)
@@ -115,21 +117,21 @@ lazy val management = pekkoModule("management")
   .enablePlugins(AutomateHeaderPlugin, ReproducibleBuildsPlugin)
   .settings(
     name := "pekko-management",
-    libraryDependencies := Dependencies.managementHttp ++ junitDependencies.value,
+    libraryDependencies ++= Dependencies.managementHttp ++ junitDependencies.value,
     mimaPreviousArtifactsSet)
 
 lazy val managementPki = pekkoModule("management-pki")
   .enablePlugins(AutomateHeaderPlugin, ReproducibleBuildsPlugin)
   .settings(
     name := "pekko-management-pki",
-    libraryDependencies := Dependencies.managementPki,
+    libraryDependencies ++= Dependencies.managementPki,
     mimaPreviousArtifactsSet)
 
 lazy val managementLoglevelsLogback = pekkoModule("management-loglevels-logback")
   .enablePlugins(AutomateHeaderPlugin, ReproducibleBuildsPlugin)
   .settings(
     name := "pekko-management-loglevels-logback",
-    libraryDependencies := Dependencies.managementLoglevelsLogback,
+    libraryDependencies ++= Dependencies.managementLoglevelsLogback,
     mimaPreviousArtifactsSet)
   .dependsOn(management)
 
@@ -137,7 +139,7 @@ lazy val managementLoglevelsLog4j2 = pekkoModule("management-loglevels-log4j2")
   .enablePlugins(AutomateHeaderPlugin, ReproducibleBuildsPlugin)
   .settings(
     name := "pekko-management-loglevels-log4j2",
-    libraryDependencies := Dependencies.managementLoglevelsLog4j2,
+    libraryDependencies ++= Dependencies.managementLoglevelsLog4j2,
     mimaPreviousArtifactsSet)
   .dependsOn(management)
 
@@ -145,7 +147,7 @@ lazy val managementClusterHttp = pekkoModule("management-cluster-http")
   .enablePlugins(AutomateHeaderPlugin, ReproducibleBuildsPlugin)
   .settings(
     name := "pekko-management-cluster-http",
-    libraryDependencies := Dependencies.managementClusterHttp ++ junitDependencies.value,
+    libraryDependencies ++= Dependencies.managementClusterHttp ++ junitDependencies.value,
     // following is needed by Agrona lib
     // https://github.com/aeron-io/agrona/wiki/Change-Log#200-2024-12-17
     Test / fork := true,
@@ -157,7 +159,7 @@ lazy val managementClusterBootstrap = pekkoModule("management-cluster-bootstrap"
   .enablePlugins(AutomateHeaderPlugin, ReproducibleBuildsPlugin)
   .settings(
     name := "pekko-management-cluster-bootstrap",
-    libraryDependencies := Dependencies.managementClusterBootstrap ++ junitDependencies.value,
+    libraryDependencies ++= Dependencies.managementClusterBootstrap ++ junitDependencies.value,
     // following is needed by Agrona lib
     // https://github.com/aeron-io/agrona/wiki/Change-Log#200-2024-12-17
     Test / fork := true,
@@ -170,7 +172,7 @@ lazy val leaseKubernetes = pekkoModule("lease-kubernetes")
   .enablePlugins(AutomateHeaderPlugin, ReproducibleBuildsPlugin)
   .settings(
     name := "pekko-lease-kubernetes",
-    libraryDependencies := Dependencies.leaseKubernetes,
+    libraryDependencies ++= Dependencies.leaseKubernetes,
     mimaPreviousArtifactsSet)
   .dependsOn(managementPki)
 
@@ -178,7 +180,7 @@ lazy val rollingUpdateKubernetes = pekkoModule("rolling-update-kubernetes")
   .enablePlugins(AutomateHeaderPlugin, ReproducibleBuildsPlugin)
   .settings(
     name := "pekko-rolling-update-kubernetes",
-    libraryDependencies := Dependencies.rollingUpdateKubernetes ++ junitDependencies.value,
+    libraryDependencies ++= Dependencies.rollingUpdateKubernetes ++ junitDependencies.value,
     // following is needed by Agrona lib
     // https://github.com/aeron-io/agrona/wiki/Change-Log#200-2024-12-17
     Test / fork := true,
@@ -202,7 +204,7 @@ lazy val leaseKubernetesIntTest = pekkoModule("lease-kubernetes-int-test")
   .disablePlugins(MimaPlugin)
   .settings(
     name := "pekko-lease-kubernetes-int-test",
-    libraryDependencies := Dependencies.leaseKubernetesTest,
+    libraryDependencies ++= Dependencies.leaseKubernetesTest,
     version ~= (_.replace('+', '-')),
     dockerBaseImage := "eclipse-temurin:17-jre-alpine",
     dockerUpdateLatest := true,
@@ -221,7 +223,7 @@ lazy val integrationTestKubernetesApi = pekkoIntTestModule("kubernetes-api")
   .disablePlugins(MimaPlugin)
   .enablePlugins(AutomateHeaderPlugin)
   .settings(
-    libraryDependencies := Dependencies.bootstrapDemos)
+    libraryDependencies ++= Dependencies.bootstrapDemos)
   .dependsOn(management, managementClusterHttp, managementClusterBootstrap, discoveryKubernetesApi)
   .enablePlugins(NoPublish)
 
@@ -229,7 +231,7 @@ lazy val integrationTestKubernetesApiJava = pekkoIntTestModule("kubernetes-api-j
   .disablePlugins(MimaPlugin)
   .enablePlugins(AutomateHeaderPlugin, NoPublish)
   .settings(
-    libraryDependencies := Dependencies.bootstrapDemos)
+    libraryDependencies ++= Dependencies.bootstrapDemos)
   .dependsOn(
     management,
     managementClusterHttp,
@@ -240,7 +242,7 @@ lazy val integrationTestKubernetesDns = pekkoIntTestModule("kubernetes-dns")
   .disablePlugins(MimaPlugin)
   .enablePlugins(AutomateHeaderPlugin, NoPublish)
   .settings(
-    libraryDependencies := Dependencies.bootstrapDemos)
+    libraryDependencies ++= Dependencies.bootstrapDemos)
   .dependsOn(
     management,
     managementClusterHttp,
@@ -285,7 +287,7 @@ lazy val integrationTestLocal = pekkoIntTestModule("local")
   .enablePlugins(AutomateHeaderPlugin)
   .settings(
     name := "integration-test-local",
-    libraryDependencies := Dependencies.bootstrapDemos)
+    libraryDependencies ++= Dependencies.bootstrapDemos)
   .dependsOn(
     management,
     managementClusterHttp,

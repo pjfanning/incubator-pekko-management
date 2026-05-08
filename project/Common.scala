@@ -15,6 +15,7 @@ import sbt._
 import org.mdedetrich.apache.sonatype.ApacheSonatypePlugin
 import sbtdynver.DynVerPlugin
 import sbtdynver.DynVerPlugin.autoImport.dynverSonatypeSnapshots
+import com.github.sbt.JavaFormatterPlugin.autoImport.javafmtSortImports
 
 object Common extends AutoPlugin {
 
@@ -83,6 +84,7 @@ object Common extends AutoPlugin {
         "-doc-canonical-base-url",
         "https://pekko.apache.org/api/pekko-management/current/"),
       autoAPIMappings := true,
+      javafmtSortImports := false,
       // show full stack traces and test case durations
       Test / testOptions += Tests.Argument("-oDF"),
       // -v Log "test run started" / "test started" / "test run finished" events on log level "info" instead of "debug".
