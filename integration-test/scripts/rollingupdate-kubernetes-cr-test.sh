@@ -62,25 +62,13 @@ do
       echo "Expected $pod_list, but didn't find expected pods in CR: $cr_pod_list"
   fi
 
-  for pod_name in $pod_list
-  do
-    # Get the pod names from the cr
-    cr_pod_list=$(kubectl describe podcosts.pekko.apache.org $APP_NAME -n $NAMESPACE | grep "Pod Name" | awk '{print $3}' | sort -z)
-
-    # Check if the annotation value is set or empty
-    if ["$pod_list" == "$cr_pod_list" ]
-    then
-      echo "Found expected pods in CR: $cr_pod_list"
-    else
-      echo "Didn't find expected pods in CR: $cr_pod_list"
-    fi
-  done
+  # Increment the try count and check if the maximum number of tries is reached
+  try_count=$((try_count+1))
+  if [[ $try_count -ge $max_tries ]]; then
+    echo "Exceeded max retries, aborting"
+    exit 1
+  fi
 
   # Wait for 10 seconds before trying again
   sleep 10
 done
-
-if [[ $try_count -ge $max_tries ]]; then
-  echo "Exceeded max retries, aborting"
-  exit 1
-fi
