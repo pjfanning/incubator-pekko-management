@@ -63,8 +63,9 @@ spec:
               fieldPath: metadata.name
         - name: REQUIRED_CONTACT_POINT_NR
           value: "3"
+        # Agrona requires the --add-opens JVM option to work on recent JDKs
         - name: JAVA_TOOL_OPTIONS
-          value: "-XX:InitialRAMPercentage=75 -XX:MaxRAMPercentage=75 -Xlog:gc -Dpekko.rollingupdate.kubernetes.custom-resource.enabled=on"
+          value: "-XX:InitialRAMPercentage=75 -XX:MaxRAMPercentage=75 -Xlog:gc -Dpekko.rollingupdate.kubernetes.custom-resource.enabled=on --add-opens=java.base/jdk.internal.misc=ALL-UNNAMED"
 #deployment
 ---
 #rbac-reader
