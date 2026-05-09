@@ -217,6 +217,28 @@ lazy val leaseKubernetesIntTest = pekkoModule("lease-kubernetes-int-test")
       Cmd("RUN", "chmod +x /opt/docker/bin/pekko-lease-kubernetes-int-test")))
   .enablePlugins(NoPublish)
 
+lazy val rollingUpdateKubernetesIntTest = pekkoModule("rolling-update-kubernetes-int-test")
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(MimaPlugin)
+  .settings(
+    name := "pekko-rolling-update-kubernetes-int-test",
+    libraryDependencies := Dependencies.rollingUpdateKubernetesIntTest)
+  .dependsOn(rollingUpdateKubernetes)
+  .enablePlugins(NoPublish)
+
+lazy val integrationTestRollingUpdateKubernetes = pekkoIntTestModule("rolling-update-kubernetes")
+  .enablePlugins(JavaAppPackaging, DockerPlugin)
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(MimaPlugin)
+  .settings(
+    name := "integration-test-rolling-update-kubernetes",
+    libraryDependencies := Dependencies.bootstrapDemos,
+    version ~= (_.replace('+', '-')),
+    dockerUpdateLatest := true,
+    dockerExposedPorts := Seq(8080, 8558, 2552))
+  .dependsOn(rollingUpdateKubernetes, management, managementClusterHttp, managementClusterBootstrap, discoveryKubernetesApi)
+  .enablePlugins(NoPublish)
+
 lazy val integrationTestKubernetesApi = pekkoIntTestModule("kubernetes-api")
   .disablePlugins(MimaPlugin)
   .enablePlugins(AutomateHeaderPlugin)
