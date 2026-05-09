@@ -13,7 +13,7 @@
 
 package org.apache.pekko.rollingupdate.kubernetes
 
-import scala.concurrent.duration._
+import scala.concurrent.duration.{ DurationInt, FiniteDuration }
 import scala.jdk.DurationConverters._
 
 import org.apache.pekko
@@ -45,7 +45,7 @@ private[kubernetes] object KubernetesSettings {
     val customResourceSettings = new CustomResourceSettings(
       enabled = config.getBoolean("custom-resource.enabled"),
       crName = crName,
-      cleanupAfter = config.getDuration("custom-resource.cleanup-after").asScala
+      cleanupAfter = config.getDuration("custom-resource.cleanup-after").toScala
     )
 
     new KubernetesSettings(
@@ -57,7 +57,7 @@ private[kubernetes] object KubernetesSettings {
       config.getString("namespace-path"),
       config.getString("pod-name"),
       config.getBoolean("secure-api-server"),
-      config.getDuration("api-service-request-timeout").asScala,
+      config.getDuration("api-service-request-timeout").toScala,
       customResourceSettings
     )
   }
