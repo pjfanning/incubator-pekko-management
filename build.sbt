@@ -236,7 +236,8 @@ lazy val integrationTestRollingUpdateKubernetes = pekkoIntTestModule("rolling-up
     version ~= (_.replace('+', '-')),
     dockerUpdateLatest := true,
     dockerExposedPorts := Seq(8080, 8558, 2552))
-  .dependsOn(rollingUpdateKubernetes, management, managementClusterHttp, managementClusterBootstrap, discoveryKubernetesApi)
+  .dependsOn(rollingUpdateKubernetes, management, managementClusterHttp, managementClusterBootstrap,
+    discoveryKubernetesApi)
   .enablePlugins(NoPublish)
 
 lazy val integrationTestKubernetesApi = pekkoIntTestModule("kubernetes-api")

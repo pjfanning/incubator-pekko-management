@@ -35,7 +35,6 @@ import org.scalatest.wordspec.AnyWordSpecLike
  * One way of doing this is to have a kubectl proxy open:
  *
  * `kubectl proxy --port=8080`
- *
  */
 class KubernetesApiIntegrationTest
     extends TestKit(
