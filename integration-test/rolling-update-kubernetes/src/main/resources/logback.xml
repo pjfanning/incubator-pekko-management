@@ -12,8 +12,8 @@
         <appender-ref ref="CONSOLE"/>
     </root>
 
-    <logger name="pekko.rollingupdate" level="DEBUG"/>
-    <logger name="pekko.http" level="INFO"/>
-    <logger name="pekko.io" level="INFO"/>
+    <logger name="org.apache.pekko.rollingupdate" level="DEBUG"/>
+    <logger name="org.apache.pekko.http" level="INFO"/>
+    <logger name="org.apache.pekko.io" level="INFO"/>
 
 </configuration>
