@@ -1,7 +1,6 @@
 name: Integration test for Rolling Update CR Kubernetes
 
 on:
-  pull_request:
   push:
     branches:
       - main
