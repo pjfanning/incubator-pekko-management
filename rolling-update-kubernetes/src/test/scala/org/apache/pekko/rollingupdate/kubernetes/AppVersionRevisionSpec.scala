@@ -181,9 +181,9 @@ class AppVersionRevisionSpec
       stubFor(getPod(podName1).willReturn(aResponse().withStatus(404)))
       EventFilter
         .warning(pattern = ".*Failed to get revision", occurrences = 5)
-        .intercept({
+        .intercept {
           assert(kubernetesApi.readRevision().failed.futureValue.isInstanceOf[ReadRevisionException])
-        })
+        }
     }
 
     "retry and then fail when replicaset not found" in {
@@ -191,18 +191,18 @@ class AppVersionRevisionSpec
       stubFor(getReplicaSet("parent-replicaset-id").willReturn(aResponse().withStatus(404)))
       EventFilter
         .warning(pattern = ".*Failed to get revision", occurrences = 5)
-        .intercept({
+        .intercept {
           assert(kubernetesApi.readRevision().failed.futureValue.isInstanceOf[ReadRevisionException])
-        })
+        }
     }
 
     "log if pod json can not be parsed" in {
       stubPodResponse(json = """{ "invalid": "json" }""")
       EventFilter
         .warning(pattern = ".*Error while parsing Pod*")
-        .intercept({
+        .intercept {
           assert(kubernetesApi.readRevision().failed.futureValue.isInstanceOf[ReadRevisionException])
-        })
+        }
     }
 
     "log if replica json can not be parsed" in {
@@ -210,9 +210,9 @@ class AppVersionRevisionSpec
       stubReplicaResponse(json = """{ "invalid": "json" }""")
       EventFilter
         .warning(pattern = ".*Error while parsing Pod*")
-        .intercept({
+        .intercept {
           assert(kubernetesApi.readRevision().failed.futureValue.isInstanceOf[ReadRevisionException])
-        })
+        }
     }
 
     "break the loop if consecutive request succeeds" in {
@@ -234,9 +234,9 @@ class AppVersionRevisionSpec
       stubReplicaResponse()
       EventFilter
         .warning(pattern = ".*Try again*", occurrences = 2)
-        .intercept({
+        .intercept {
           kubernetesApi.readRevision().futureValue should be("1")
-        })
+        }
     }
   }
 }
