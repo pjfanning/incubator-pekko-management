@@ -90,6 +90,8 @@ object PodDeletionCostAnnotatorCrSpec {
     def getPodCosts(): Vector[PodCost] = this.synchronized {
       podCosts
     }
+
+    override def readRevision(): Future[String] = Future.successful("1")
   }
 }
 
