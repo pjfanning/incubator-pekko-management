@@ -16,6 +16,7 @@
 # under the License.
 
 # removed internal classes
+ProblemFilters.exclude[MissingFieldProblem]("org.apache.pekko.management.cluster.bootstrap.ClusterBootstrap.Internal")
 ProblemFilters.exclude[MissingClassProblem]("org.apache.pekko.management.cluster.bootstrap.ClusterBootstrap$Internal$")
 ProblemFilters.exclude[MissingClassProblem]("org.apache.pekko.management.cluster.bootstrap.ClusterBootstrap$Internal$BootstrapStep")
 ProblemFilters.exclude[MissingClassProblem]("org.apache.pekko.management.cluster.bootstrap.ClusterBootstrap$Internal$Initializing$")

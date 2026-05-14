@@ -1,14 +1,9 @@
 name: Integration Tests for AppVersionRevision
 
 on:
-  pull_request:
   push:
     branches:
       - main
-      - release-*
-    tags-ignore: [ v.* ]
-  schedule:
-    - cron: '0 2 * * *'  # every day 2am
   workflow_dispatch:
 
 permissions:
