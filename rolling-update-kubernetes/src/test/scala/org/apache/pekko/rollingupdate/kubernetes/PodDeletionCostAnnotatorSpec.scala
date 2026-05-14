@@ -13,20 +13,20 @@
 
 package org.apache.pekko.rollingupdate.kubernetes
 
-import org.apache.pekko.actor.ActorSystem
-import org.apache.pekko.actor.Address
-import org.apache.pekko.actor.Props
-import org.apache.pekko.cluster.Cluster
-import org.apache.pekko.cluster.ClusterEvent.MemberUp
-import org.apache.pekko.cluster.Member
-import org.apache.pekko.cluster.MemberStatus
-import org.apache.pekko.cluster.MemberStatus.Up
-import org.apache.pekko.cluster.UniqueAddress
-import org.apache.pekko.testkit.EventFilter
-import org.apache.pekko.testkit.ImplicitSender
-import org.apache.pekko.testkit.TestKit
-import org.apache.pekko.testkit.TestProbe
-import org.apache.pekko.util.Version
+import org.apache.pekko
+import pekko.actor.ActorSystem
+import pekko.actor.Address
+import pekko.cluster.Cluster
+import pekko.cluster.ClusterEvent.MemberUp
+import pekko.cluster.Member
+import pekko.cluster.MemberStatus
+import pekko.cluster.MemberStatus.Up
+import pekko.cluster.UniqueAddress
+import pekko.testkit.EventFilter
+import pekko.testkit.ImplicitSender
+import pekko.testkit.TestKit
+import pekko.testkit.TestProbe
+import pekko.util.Version
 import com.github.tomakehurst.wiremock.WireMockServer
 import com.github.tomakehurst.wiremock.client.MappingBuilder
 import com.github.tomakehurst.wiremock.client.WireMock
@@ -99,16 +99,27 @@ class PodDeletionCostAnnotatorSpec
       namespace = Some(namespace),
       namespacePath = "",
       podName = podName,
-      secure = false)
+      secure = false,
+      apiServiceRequestTimeout = 2.seconds,
+      customResourceSettings = new CustomResourceSettings(enabled = false, crName = None, cleanupAfter = 60.seconds)
+    )
   }
 
-  private def annotatorProps(pod: String) = Props(
-    classOf[PodDeletionCostAnnotator],
-    settings(pod),
-    "apiToken",
-    namespace,
-    PodDeletionCostSettings(system.settings.config.getConfig("pekko.rollingupdate.kubernetes"))
-  )
+  private def kubernetesApi(pod: String) =
+    new KubernetesApiImpl(
+      system,
+      settings(pod),
+      namespace,
+      apiToken = "apiToken",
+      clientHttpsConnectionContext = None)
+
+  private def annotatorProps(pod: String) =
+    PodDeletionCostAnnotator.props(
+      settings(pod),
+      PodDeletionCostSettings(system.settings.config.getConfig("pekko.rollingupdate.kubernetes")),
+      kubernetesApi(pod),
+      crName = None
+    )
 
   override implicit val patienceConfig: PatienceConfig =
     PatienceConfig(timeout = Span(5, Seconds), interval = Span(100, Millis))
@@ -241,7 +252,7 @@ class PodDeletionCostAnnotatorSpec
 
       assertState(scenarioName, "FAILING")
 
-      val underTest = expectLogWarning(".*Failed to update annotation:.*") {
+      val underTest = expectLogWarning(".*Failed to update pod-deletion-cost annotation:.*") {
         system.actorOf(annotatorProps(podName1))
       }
 

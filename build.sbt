@@ -186,6 +186,19 @@ lazy val rollingUpdateKubernetes = pekkoModule("rolling-update-kubernetes")
     mimaPreviousArtifacts := Set.empty)
   .dependsOn(managementPki)
 
+lazy val rollingUpdateKubernetesIntTest = pekkoModule("rolling-update-kubernetes-int-test")
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(MimaPlugin)
+  .settings(
+    name := "pekko-rolling-update-kubernetes-int-test",
+    libraryDependencies := Dependencies.rollingUpdateKubernetesIntTest,
+    // following is needed by Agrona lib
+    // https://github.com/aeron-io/agrona/wiki/Change-Log#200-2024-12-17
+    Test / fork := true,
+    Test / javaOptions += "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED")
+  .dependsOn(rollingUpdateKubernetes)
+  .enablePlugins(NoPublish)
+
 lazy val billOfMaterials = Project("bill-of-materials", file("bill-of-materials"))
   .enablePlugins(BillOfMaterialsPlugin)
   .disablePlugins(MimaPlugin)
@@ -215,6 +228,20 @@ lazy val leaseKubernetesIntTest = pekkoModule("lease-kubernetes-int-test")
       Cmd("RUN", "chgrp -R 0 . && chmod -R g=u ."),
       Cmd("RUN", "/sbin/apk", "add", "--no-cache", "bash", "bind-tools", "busybox-extras", "curl", "strace"),
       Cmd("RUN", "chmod +x /opt/docker/bin/pekko-lease-kubernetes-int-test")))
+  .enablePlugins(NoPublish)
+
+lazy val integrationTestRollingUpdateKubernetes = pekkoIntTestModule("rolling-update-kubernetes")
+  .enablePlugins(JavaAppPackaging, DockerPlugin)
+  .enablePlugins(AutomateHeaderPlugin)
+  .disablePlugins(MimaPlugin)
+  .settings(
+    name := "integration-test-rolling-update-kubernetes",
+    libraryDependencies := Dependencies.bootstrapDemos,
+    version ~= (_.replace('+', '-')),
+    dockerUpdateLatest := true,
+    dockerExposedPorts := Seq(8080, 8558, 2552))
+  .dependsOn(rollingUpdateKubernetes, management, managementClusterHttp, managementClusterBootstrap,
+    discoveryKubernetesApi)
   .enablePlugins(NoPublish)
 
 lazy val integrationTestKubernetesApi = pekkoIntTestModule("kubernetes-api")
