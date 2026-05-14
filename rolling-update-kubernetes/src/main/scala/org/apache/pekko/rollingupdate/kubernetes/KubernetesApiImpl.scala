@@ -324,6 +324,106 @@ PUTs must contain resourceVersions. Response:
     } yield resource
   }
 
+  /**
+   * Start a proxy in local minikube:
+   * - kubectl proxy --port=8080
+   * - replic_set_name=$(curl -s http://localhost:8080/api/v1/namespaces/pekko-rollingupdate-demo-ns/pods | jq '.items[0].metadata.ownerReferences[0].name'| tr -d '"')
+   * - revision=$(curl -s http://localhost:8080/apis/apps/v1/namespaces/pekko-rollingupdate-demo-ns/replicasets/"$replic_set_name" | jq '.metadata.annotations["deployment.kubernetes.io/revision"]'| tr -d '"')
+   */
+  override def readRevision(): Future[String] = {
+    val maxTries = 5
+    def loop(tries: Int = 0): Future[Option[String]] = {
+
+      val podOwnerRef = getPod().map(_.metadata.ownerReferences.filter(_.kind == "ReplicaSet").headOption)
+
+      val replicaSet = podOwnerRef.flatMap {
+        case Some(podOwnerRef) => getReplicaSet(podOwnerRef.name)
+        case None              => Future.failed(new ReadRevisionException("No replica name found"))
+      }
+
+      val revision = replicaSet.map(_.metadata.annotations.`deployment.kubernetes.io/revision`)
+      revision.map(Some(_)).recoverWith {
+        case ex =>
+          if (tries >= maxTries) {
+            Future(None)
+          } else {
+            log.warning(s"Failed to get revision ${ex.getMessage}. Try again ($tries)")
+            loop(tries + 1)
+          }
+      }
+    }
+
+    loop()
+      .map {
+        case Some(revision) =>
+          log.info(s"Reading revision from Kubernetes: pekko.cluster.app-version was set to $revision")
+          revision
+        case None => throw new ReadRevisionException(s"Not able to read revision from Kubernetes.")
+      }
+      .recover {
+        case ex =>
+          throw new ReadRevisionException(s"Error. Not able to read revision from Kubernetes: ${ex.getMessage}")
+      }
+  }
+
+  private val pathForGetPod: Uri.Path =
+    Uri.Path.Empty / "api" / "v1" / "namespaces" / namespace / "pods" / settings.podName
+
+  private def pathForReplicaSet(replicaSetName: String): Uri.Path =
+    Uri.Path.Empty / "apis" / "apps" / "v1" / "namespaces" / namespace / "replicasets" / replicaSetName
+
+  private def getReplicaSet(name: String): Future[ReplicaSet] = {
+    val ent = HttpEntity.Empty.withContentType(ContentTypes.`application/json`)
+    val request = requestForPath(pathForReplicaSet(name), entity = ent)
+    val httpResponse = makeRequest(request, s"Timeout getting replica set '$name'")
+    for {
+      response <- httpResponse
+      responseEntity <- response.entity.toStrict(settings.bodyReadTimeout)
+      replicaSet <- response.status match {
+        case StatusCodes.OK =>
+          Unmarshal(responseEntity).to[ReplicaSet].recover {
+            case ex =>
+              throw new ReplicaSetException(s"Error while parsing ReplicaSet: ${ex.getMessage}")
+          }
+        case StatusCodes.Unauthorized =>
+          handleUnauthorized(response)
+        case unexpected =>
+          responseEntity
+            .toStrict(settings.bodyReadTimeout)
+            .flatMap(e => Unmarshal(e).to[String])
+            .map(body =>
+              throw new ReplicaSetException(
+                s"Unexpected response from API server when retrieving ReplicaSet: $unexpected. Body: $body"))
+      }
+    } yield {
+      replicaSet
+    }
+  }
+
+  private def getPod(): Future[Pod] = {
+    val ent = HttpEntity.Empty.withContentType(ContentTypes.`application/json`)
+    val request = requestForPath(pathForGetPod, entity = ent)
+    val httpResponse = makeRequest(request, "Timeout getting pod")
+    for {
+      response <- httpResponse
+      responseEntity <- response.entity.toStrict(settings.bodyReadTimeout)
+      pod <- response.status match {
+        case StatusCodes.OK =>
+          Unmarshal(responseEntity).to[Pod].recover {
+            case ex => throw new GetPodException(s"Error while parsing Pod: ${ex.getMessage}")
+          }
+        case StatusCodes.Unauthorized =>
+          handleUnauthorized(response)
+        case unexpected =>
+          Unmarshal(response.entity)
+            .to[String]
+            .map(body =>
+              throw new GetPodException(
+                s"Unexpected response from API server when retrieving Pod. StatusCode: $unexpected. Body: $body"))
+      }
+    } yield pod
+  }
+
 }
 
 /**

@@ -129,3 +129,70 @@ that gives the default service user this role in `<YOUR NAMESPACE>`.
 This RBAC example covers only the permissions needed for this `PodDeletionCost` extension specifically. However, usually you'll also be using @ref:[Kubernetes API](bootstrap/kubernetes-api.md) for discovery and bootstrap of your cluster, so you'll need to combine this with any other role required already configured, either by keeping them separately or merging them into a single role.
 
 @@@
+
+## app-version from Deployment
+
+When using Cluster Sharding, it is [recommended](https://pekko.apache.org/docs/pekko/current/additional/rolling-updates.html#cluster-sharding) for rolling updates that you define an increasing `pekko.cluster.app-version` configuration property for each roll out.
+
+This works well unless you use `kubectl rollout undo` which deploys the previous ReplicaSet configuration which contains the previous value for that config.
+
+To fix this, you can use `AppVersionRevision` to read the current annotation `deployment.kubernetes.io/revision` (part of the ReplicaSet) from the Kubernetes Deployment via the Kubernetes API which always increases, also during a rollback:
+
+### Using
+
+The AppVersionRevision extension must be started, this can either be done through config or programmatically.
+
+**Through config**
+
+Listing the `AppVersionRevision` extension among the autoloaded `pekko.extensions` in `application.conf` will also cause it to autostart:
+
+```
+pekko.extensions = ["org.apache.pekko.rollingupdate.kubernetes.AppVersionRevision"]
+```
+
+If the extension configuration is incorrect, the autostart will log an error and terminate the actor system.
+
+**Programmatically**
+
+Scala
+:  @@snip [AppVersionRevisionCompileOnly.scala](/rolling-update-kubernetes/src/test/scala/doc/pekko/rollingupdate/kubernetes/AppVersionRevisionCompileOnly.scala) { #start }
+
+Java
+:  @@snip [AppVersionRevisionCompileOnly.java](/rolling-update-kubernetes/src/test/java/jdoc/pekko/rollingupdate/kubernetes/AppVersionRevisionCompileOnly.java) { #start }
+
+#### Configuration
+
+The following configuration is required, more details for each and additional configurations can be found in [reference.conf](https://github.com/apache/pekko-management/blob/main/rolling-update-kubernetes/src/main/resources/reference.conf):
+
+* `pekko.rollingupdate.kubernetes.pod-name`: this can be provided by setting `KUBERNETES_POD_NAME` environment variable to `metadata.name` on the Kubernetes container spec.
+
+Additionally, the pod annotator needs to know which namespace the pod belongs to. By default, this will be detected by reading the namespace
+from the service account secret, in `/var/run/secrets/kubernetes.io/serviceaccount/namespace`, but can be overridden by
+setting `pekko.rollingupdate.kubernetes.namespace` or by providing `KUBERNETES_NAMESPACE` environment variable.
+
+#### Role based access control
+
+Make sure to provide access to the corresponding RBAC rules `apiGroups` and `resources` like this:
+
+```yaml
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: pod-reader
+rules:
+- apiGroups: ["apps", ""]
+  resources: ["pods", "replicasets"]
+  verbs: ["get", "list"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: pod-reader
+subjects:
+- kind: ServiceAccount
+  name: default
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io
+```

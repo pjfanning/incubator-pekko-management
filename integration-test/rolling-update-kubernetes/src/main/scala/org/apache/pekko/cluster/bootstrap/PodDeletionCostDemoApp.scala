@@ -20,6 +20,7 @@ import pekko.http.scaladsl.Http
 import pekko.http.scaladsl.server.Directives._
 import pekko.management.cluster.bootstrap.ClusterBootstrap
 import pekko.management.scaladsl.PekkoManagement
+import pekko.rollingupdate.kubernetes.AppVersionRevision
 import pekko.rollingupdate.kubernetes.PodDeletionCost
 
 object PodDeletionCostDemoApp extends App {
@@ -32,6 +33,9 @@ object PodDeletionCostDemoApp extends App {
   log.info(s"Started [$system], cluster.selfAddress = ${cluster.selfAddress}")
 
   PekkoManagement(system).start()
+
+  // preferred to be called before ClusterBootstrap
+  AppVersionRevision(system).start()
 
   ClusterBootstrap(system).start()
 
