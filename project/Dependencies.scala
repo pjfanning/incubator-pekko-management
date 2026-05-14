@@ -166,6 +166,10 @@ object Dependencies {
     "org.apache.pekko" %% "pekko-testkit" % pekkoVersion % Test) ++
     wireMockDependencies
 
+  val rollingUpdateKubernetesIntTest = Seq(
+    "org.scalatest" %% "scalatest" % scalaTestVersion,
+    "org.apache.pekko" %% "pekko-testkit" % pekkoVersion % Test)
+
   val leaseKubernetesTest = Seq(
     "org.scalatest" %% "scalatest" % scalaTestVersion,
     "org.apache.pekko" %% "pekko-testkit" % pekkoVersion % Test)

@@ -8,31 +8,23 @@
  */
 
 /*
- * Copyright (C) 2017-2021 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2017-2023 Lightbend Inc. <https://www.lightbend.com>
  */
 
 package org.apache.pekko.rollingupdate.kubernetes
 
-import org.apache.pekko.actor.ActorSystem
-import org.apache.pekko.actor.ClassicActorSystemProvider
-import org.apache.pekko.actor.ExtendedActorSystem
-import org.apache.pekko.actor.Extension
-import org.apache.pekko.actor.ExtensionId
-import org.apache.pekko.actor.ExtensionIdProvider
-import org.apache.pekko.actor.Props
-import org.apache.pekko.annotation.InternalApi
-import org.apache.pekko.dispatch.Dispatchers.DefaultBlockingDispatcherId
-import org.apache.pekko.event.Logging
-import org.apache.pekko.rollingupdate.kubernetes.PodDeletionCost.Internal.BootstrapStep
-import org.apache.pekko.rollingupdate.kubernetes.PodDeletionCost.Internal.Initializing
-import org.apache.pekko.rollingupdate.kubernetes.PodDeletionCost.Internal.NotRunning
-
-import java.nio.file.Files
-import java.nio.file.Paths
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicBoolean
 import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
 import scala.util.control.NonFatal
+
+import org.apache.pekko
+import pekko.actor.ActorSystem
+import pekko.actor.ClassicActorSystemProvider
+import pekko.actor.ExtendedActorSystem
+import pekko.actor.Extension
+import pekko.actor.ExtensionId
+import pekko.actor.ExtensionIdProvider
+import pekko.event.Logging
 
 final class PodDeletionCost(implicit system: ExtendedActorSystem) extends Extension {
 
@@ -41,9 +33,11 @@ final class PodDeletionCost(implicit system: ExtendedActorSystem) extends Extens
   private val config = system.settings.config.getConfig(configPath)
   private val k8sSettings = KubernetesSettings(config)
   private val costSettings = PodDeletionCostSettings(config)
+  implicit private val ec: ExecutionContext = system.dispatcher
+
   log.debug("Settings {}", k8sSettings)
 
-  private final val startStep = new AtomicReference[BootstrapStep](NotRunning)
+  private final val startStep = new AtomicBoolean(false)
 
   def start(): Unit = {
     if (k8sSettings.podName.isEmpty) {
@@ -51,40 +45,30 @@ final class PodDeletionCost(implicit system: ExtendedActorSystem) extends Extens
         "No configuration found to extract the pod name from. " +
         s"Be sure to provide the pod name with `$configPath.pod-name` " +
         "or by setting ENV variable `KUBERNETES_POD_NAME`.")
-    } else if (startStep.compareAndSet(NotRunning, Initializing)) {
-      log.debug("Starting PodDeletionCost for podName={} with settings={}", k8sSettings.podName, costSettings)
-
-      implicit val blockingDispatcher: ExecutionContext = system.dispatchers.lookup(DefaultBlockingDispatcherId)
-      val props = for {
-        apiToken: String <- Future { readConfigVarFromFilesystem(k8sSettings.apiTokenPath, "api-token").getOrElse("") }
-        podNamespace: String <- Future {
-          k8sSettings.namespace
-            .orElse(readConfigVarFromFilesystem(k8sSettings.namespacePath, "namespace"))
-            .getOrElse("default")
-        }
-      } yield Props(classOf[PodDeletionCostAnnotator], k8sSettings, apiToken, podNamespace, costSettings)
+    } else if (startStep.compareAndSet(false, true)) {
+      val props = KubernetesApiImpl(log, k8sSettings).map { kubernetesApi =>
+        val crName =
+          if (k8sSettings.customResourceSettings.enabled) {
+            val name =
+              k8sSettings.customResourceSettings.crName.getOrElse(KubernetesApi.makeDNS1039Compatible(system.name))
+            log.info(
+              "Starting PodDeletionCost for podName [{}], [{}] oldest will be written to CR [{}].",
+              k8sSettings.podName,
+              costSettings.annotatedPodsNr,
+              name)
+            Some(name)
+          } else {
+            log.info(
+              "Starting PodDeletionCost for podName [{}], [{}] oldest will be annotated.",
+              k8sSettings.podName,
+              costSettings.annotatedPodsNr)
+            None
+          }
+        PodDeletionCostAnnotator.props(k8sSettings, costSettings, kubernetesApi, crName)
+      }
 
       props.foreach(system.systemActorOf(_, "podDeletionCostAnnotator"))
     } else log.warning("PodDeletionCost extension already initiated, yet start() method was called again. Ignoring.")
-  }
-
-  /**
-   * This uses blocking IO, and so should only be used to read configuration at startup.
-   */
-  private def readConfigVarFromFilesystem(path: String, name: String): Option[String] = {
-    val file = Paths.get(path)
-    if (Files.exists(file)) {
-      try {
-        Some(new String(Files.readAllBytes(file), "utf-8"))
-      } catch {
-        case NonFatal(e) =>
-          log.error(e, "Error reading {} from {}", name, path)
-          None
-      }
-    } else {
-      log.warning("Unable to read {} from {} because it doesn't exist.", name, path)
-      None
-    }
   }
 
   // autostart if the extension is loaded through the config extension list
@@ -111,14 +95,5 @@ object PodDeletionCost extends ExtensionId[PodDeletionCost] with ExtensionIdProv
   override def get(system: ClassicActorSystemProvider): PodDeletionCost = super.get(system)
 
   override def createExtension(system: ExtendedActorSystem): PodDeletionCost = new PodDeletionCost()(system)
-
-  /**
-   * INTERNAL API
-   */
-  @InternalApi private[kubernetes] object Internal {
-    sealed trait BootstrapStep
-    case object NotRunning extends BootstrapStep
-    case object Initializing extends BootstrapStep
-  }
 
 }
