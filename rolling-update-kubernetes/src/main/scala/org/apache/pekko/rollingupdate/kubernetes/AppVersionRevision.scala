@@ -1,0 +1,87 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * license agreements; and to You under the Apache License, version 2.0:
+ *
+ *   https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * This file is part of the Apache Pekko project, which was derived from Akka.
+ */
+
+/*
+ * Copyright (C) 2017-2023 Lightbend Inc. <https://www.lightbend.com>
+ */
+
+package org.apache.pekko.rollingupdate.kubernetes
+
+import java.util.concurrent.atomic.AtomicBoolean
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.concurrent.Promise
+import scala.util.control.NonFatal
+
+import org.apache.pekko
+import pekko.actor.ActorSystem
+import pekko.actor.ExtendedActorSystem
+import pekko.actor.Extension
+import pekko.actor.ExtensionId
+import pekko.actor.ExtensionIdProvider
+import pekko.cluster.Cluster
+import pekko.event.Logging
+import pekko.util.Version
+
+final class AppVersionRevision(implicit system: ExtendedActorSystem) extends Extension {
+
+  private val log = Logging(system, classOf[AppVersionRevision])
+  private val configPath = "pekko.rollingupdate.kubernetes"
+  private val config = system.settings.config.getConfig(configPath)
+  private val k8sSettings = KubernetesSettings(config)
+  implicit private val ec: ExecutionContext = system.dispatcher
+  private final val isInitialized = new AtomicBoolean(false)
+  log.debug("Settings {}", k8sSettings)
+
+  private val versionPromise = Promise[Version]()
+
+  def getRevision(): Future[Version] = versionPromise.future
+
+  def start(): Unit = {
+    if (k8sSettings.podName.isEmpty) {
+      log.error(
+        "Not able to read the app version from the revision of the current ReplicaSet. Reason: " +
+        "No configuration found to extract the pod name from. " +
+        s"Be sure to provide the pod name with `$configPath.pod-name` " +
+        "or by setting ENV variable `KUBERNETES_POD_NAME`.")
+    } else {
+      if (isInitialized.compareAndSet(false, true)) {
+        Cluster(system).setAppVersionLater(getRevision())
+        KubernetesApiImpl(log, k8sSettings).foreach { kubernetesApi =>
+          versionPromise.completeWith(kubernetesApi.readRevision().map(Version(_)))
+        }
+      } else
+        log.warning("AppVersionRevision extension already initiated, yet start() method was called again. Ignoring.")
+    }
+  }
+
+  // autostart if the extension is loaded through the config extension list
+  private val autostart =
+    system.settings.config.getStringList("pekko.extensions").contains(classOf[AppVersionRevision].getName)
+
+  if (autostart) {
+    log.info("AppVersionRevision loaded through 'pekko.extensions' auto-starting itself.")
+    try {
+      AppVersionRevision(system).start()
+    } catch {
+      case NonFatal(ex) =>
+        log.error(ex, "Failed to autostart AppVersionRevision extension")
+    }
+  }
+}
+
+object AppVersionRevision extends ExtensionId[AppVersionRevision] with ExtensionIdProvider {
+
+  override def lookup: AppVersionRevision.type = AppVersionRevision
+
+  override def createExtension(system: ExtendedActorSystem): AppVersionRevision = new AppVersionRevision()(system)
+
+  override def get(system: ActorSystem): AppVersionRevision = super.get(system)
+
+}

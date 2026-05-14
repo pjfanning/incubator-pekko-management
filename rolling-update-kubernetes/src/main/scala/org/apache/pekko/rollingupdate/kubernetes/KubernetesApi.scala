@@ -57,6 +57,21 @@ private[pekko] final case class PodCost(podName: String, cost: Int, address: Str
 /**
  * INTERNAL API
  */
+@InternalApi private[pekko] sealed class ReadRevisionException(message: String) extends RuntimeException(message)
+
+/**
+ * INTERNAL API
+ */
+@InternalApi private[pekko] sealed class GetPodException(message: String) extends RuntimeException(message)
+
+/**
+ * INTERNAL API
+ */
+@InternalApi private[pekko] sealed class ReplicaSetException(message: String) extends RuntimeException(message)
+
+/**
+ * INTERNAL API
+ */
 @InternalApi private[pekko] object KubernetesApi {
 
   /**
@@ -88,6 +103,8 @@ private[pekko] trait KubernetesApi {
   def namespace: String
 
   def updatePodDeletionCostAnnotation(podName: String, cost: Int): Future[Done]
+
+  def readRevision(): Future[String]
 
   /**
    * Reads a PodCost from the API server. If it doesn't exist it tries to create it.
